@@ -130,10 +130,10 @@ export class UI {
   renderInventoryPanel(
     bag: Bag,
     aura: Aura,
-    onMoveSafeToUnsafe: (index: number) => void,
-    onMoveUnsafeToSafe: (index: number) => void,
-    onDropSafe: (index: number) => void,
-    onDropUnsafe: (index: number) => void
+    _onMoveSafeToUnsafe: (index: number) => void,
+    _onMoveUnsafeToSafe: (index: number) => void,
+    _onDropSafe: (index: number) => void,
+    _onDropUnsafe: (index: number) => void
   ): void {
     const rect = this.canvas.getBoundingClientRect();
     const centerX = rect.width / 2;
@@ -177,84 +177,42 @@ export class UI {
     this.ctx.fillText('背包 (按 I 或 Tab 关闭)', centerX, centerY - panelHeight / 2 + 30);
     this.ctx.restore();
 
+    const columnWidth = 360;
+    const columnHeight = panelHeight - 80;
+    const itemHeight = 50;
+
     // 绘制左栏：安全区
-    this.renderInventoryColumn(
-      '安全区',
-      bag.getSafeItems(),
-      bag.usedSafe(),
-      bag.getSafeCap(),
-      leftPanelX,
-      panelY,
-      360,
-      panelHeight - 80,
-      (index) => onMoveSafeToUnsafe(index),
-      (index) => onDropSafe(index),
-      false, // 安全区->普通区：免费，可用
-      (item: ItemInstance) => bag.canAddUnsafe(item) // 检查每个物品是否可以移动到普通区
-    );
-
-    // 绘制右栏：普通区
-    this.renderInventoryColumn(
-      '普通区',
-      bag.getUnsafeItems(),
-      bag.usedUnsafe(),
-      bag.getUnsafeCap(),
-      rightPanelX,
-      panelY,
-      360,
-      panelHeight - 80,
-      (index) => onMoveUnsafeToSafe(index),
-      (index) => onDropUnsafe(index),
-      false, // 普通区->安全区：现在可用
-      (item: ItemInstance) => bag.canAddSafe(item) && aura.canSpendAura(8) // 检查容量和灵气
-    );
-  }
-
-  /**
-   * 渲染背包列（安全区或普通区）
-   */
-  private renderInventoryColumn(
-    title: string,
-    items: ItemInstance[],
-    used: number,
-    cap: number,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    _onMove: (index: number) => void,
-    _onDrop: (index: number) => void,
-    moveDisabled: boolean,
-    canMoveItem?: (item: ItemInstance) => boolean
-  ): void {
-    // 绘制列背景
+    const safeItems = bag.getSafeItems();
+    const safeUsed = bag.usedSafe();
+    const safeCap = bag.getSafeCap();
+    
+    // 绘制安全区列背景
     this.ctx.save();
     this.ctx.fillStyle = '#2a2a2a';
-    this.ctx.fillRect(x, y, width, height);
+    this.ctx.fillRect(leftPanelX, panelY, columnWidth, columnHeight);
     this.ctx.strokeStyle = '#666666';
     this.ctx.lineWidth = 1;
-    this.ctx.strokeRect(x, y, width, height);
+    this.ctx.strokeRect(leftPanelX, panelY, columnWidth, columnHeight);
     this.ctx.restore();
 
-    // 绘制标题和容量
+    // 绘制安全区标题和容量
     this.ctx.save();
     this.ctx.fillStyle = '#ffffff';
     this.ctx.font = '18px Arial';
     this.ctx.textAlign = 'left';
-    this.ctx.fillText(`${title} (${used}/${cap})`, x + 10, y + 25);
+    this.ctx.fillText(`安全区 (${safeUsed}/${safeCap})`, leftPanelX + 10, panelY + 25);
     this.ctx.restore();
 
-    // 绘制物品列表
-    const itemHeight = 50;
-    const startY = y + 40;
-    items.forEach((item, index) => {
-      const itemY = startY + index * itemHeight;
-      if (itemY + itemHeight > y + height) return; // 超出范围不绘制
+    // 绘制安全区物品列表
+    const safeStartY = panelY + 40;
+    safeItems.forEach((item, index) => {
+      const itemY = safeStartY + index * itemHeight;
+      if (itemY + itemHeight > panelY + columnHeight) return; // 超出范围不绘制
 
       // 绘制物品背景
       this.ctx.save();
       this.ctx.fillStyle = '#3a3a3a';
-      this.ctx.fillRect(x + 5, itemY, width - 10, itemHeight - 5);
+      this.ctx.fillRect(leftPanelX + 5, itemY, columnWidth - 10, itemHeight - 5);
       this.ctx.restore();
 
       // 绘制物品信息
@@ -264,20 +222,18 @@ export class UI {
       this.ctx.textAlign = 'left';
       this.ctx.fillText(
         `${item.name} (占格${item.size})`,
-        x + 15,
+        leftPanelX + 15,
         itemY + 20
       );
       this.ctx.restore();
 
-      // 绘制移动按钮
-      const moveButtonX = x + width - 200;
+      // 绘制移动按钮（安全区->普通区）
+      const moveButtonX = leftPanelX + columnWidth - 200;
       const moveButtonY = itemY + 5;
       const moveButtonWidth = 80;
       const moveButtonHeight = 18;
       
-      // 判断该物品是否可以移动
-      const itemCanMove = moveDisabled ? false : (canMoveItem ? canMoveItem(item) : true);
-      const moveButtonText = title === '安全区' ? '移到普通区' : '移到安全区';
+      const itemCanMove = bag.canAddUnsafe(item);
       
       this.ctx.save();
       if (!itemCanMove) {
@@ -285,26 +241,103 @@ export class UI {
         this.ctx.fillRect(moveButtonX, moveButtonY, moveButtonWidth, moveButtonHeight);
         this.ctx.fillStyle = '#999999';
         this.ctx.font = '12px Arial';
-        // 根据情况显示不同的禁用文本
-        let disabledText = '容量不足';
-        if (!moveDisabled && canMoveItem) {
-          // 检查是容量不足还是灵气不足（这里简化显示）
-          disabledText = '容量/灵气不足';
-        } else if (moveDisabled) {
-          disabledText = '需灵气+读条';
-        }
-        this.ctx.fillText(disabledText, moveButtonX + 5, moveButtonY + 13);
+        this.ctx.fillText('容量不足', moveButtonX + 5, moveButtonY + 13);
       } else {
         this.ctx.fillStyle = '#4a90e2';
         this.ctx.fillRect(moveButtonX, moveButtonY, moveButtonWidth, moveButtonHeight);
         this.ctx.fillStyle = '#ffffff';
         this.ctx.font = '12px Arial';
-        this.ctx.fillText(moveButtonText, moveButtonX + 5, moveButtonY + 13);
+        this.ctx.fillText('移到普通区', moveButtonX + 5, moveButtonY + 13);
       }
       this.ctx.restore();
 
       // 绘制丢弃按钮
-      const dropButtonX = x + width - 110;
+      const dropButtonX = leftPanelX + columnWidth - 110;
+      const dropButtonY = itemY + 5;
+      const dropButtonWidth = 50;
+      const dropButtonHeight = 18;
+      
+      this.ctx.save();
+      this.ctx.fillStyle = '#ff6666';
+      this.ctx.fillRect(dropButtonX, dropButtonY, dropButtonWidth, dropButtonHeight);
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.font = '12px Arial';
+      this.ctx.fillText('丢弃', dropButtonX + 15, dropButtonY + 13);
+      this.ctx.restore();
+    });
+
+    // 绘制右栏：普通区
+    const unsafeItems = bag.getUnsafeItems();
+    const unsafeUsed = bag.usedUnsafe();
+    const unsafeCap = bag.getUnsafeCap();
+    
+    // 绘制普通区列背景
+    this.ctx.save();
+    this.ctx.fillStyle = '#2a2a2a';
+    this.ctx.fillRect(rightPanelX, panelY, columnWidth, columnHeight);
+    this.ctx.strokeStyle = '#666666';
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(rightPanelX, panelY, columnWidth, columnHeight);
+    this.ctx.restore();
+
+    // 绘制普通区标题和容量
+    this.ctx.save();
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = '18px Arial';
+    this.ctx.textAlign = 'left';
+    this.ctx.fillText(`普通区 (${unsafeUsed}/${unsafeCap})`, rightPanelX + 10, panelY + 25);
+    this.ctx.restore();
+
+    // 绘制普通区物品列表
+    const unsafeStartY = panelY + 40;
+    unsafeItems.forEach((item, index) => {
+      const itemY = unsafeStartY + index * itemHeight;
+      if (itemY + itemHeight > panelY + columnHeight) return; // 超出范围不绘制
+
+      // 绘制物品背景
+      this.ctx.save();
+      this.ctx.fillStyle = '#3a3a3a';
+      this.ctx.fillRect(rightPanelX + 5, itemY, columnWidth - 10, itemHeight - 5);
+      this.ctx.restore();
+
+      // 绘制物品信息
+      this.ctx.save();
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.font = '14px Arial';
+      this.ctx.textAlign = 'left';
+      this.ctx.fillText(
+        `${item.name} (占格${item.size})`,
+        rightPanelX + 15,
+        itemY + 20
+      );
+      this.ctx.restore();
+
+      // 绘制移动按钮（普通区->安全区）
+      const moveButtonX = rightPanelX + columnWidth - 200;
+      const moveButtonY = itemY + 5;
+      const moveButtonWidth = 80;
+      const moveButtonHeight = 18;
+      
+      const itemCanMove = bag.canAddSafe(item) && aura.canSpendAura(8);
+      
+      this.ctx.save();
+      if (!itemCanMove) {
+        this.ctx.fillStyle = '#555555';
+        this.ctx.fillRect(moveButtonX, moveButtonY, moveButtonWidth, moveButtonHeight);
+        this.ctx.fillStyle = '#999999';
+        this.ctx.font = '12px Arial';
+        this.ctx.fillText('容量/灵气不足', moveButtonX + 5, moveButtonY + 13);
+      } else {
+        this.ctx.fillStyle = '#4a90e2';
+        this.ctx.fillRect(moveButtonX, moveButtonY, moveButtonWidth, moveButtonHeight);
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '12px Arial';
+        this.ctx.fillText('移到安全区', moveButtonX + 5, moveButtonY + 13);
+      }
+      this.ctx.restore();
+
+      // 绘制丢弃按钮
+      const dropButtonX = rightPanelX + columnWidth - 110;
       const dropButtonY = itemY + 5;
       const dropButtonWidth = 50;
       const dropButtonHeight = 18;

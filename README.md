@@ -27,6 +27,7 @@
 - **Vite** - 快速的前端构建工具
 - **Canvas API** - 原生 Canvas 2D 渲染（不使用 Three.js）
 - **原生 JavaScript** - 无框架依赖
+- **Conventional Commits** - 提交消息规范（Commitlint + Husky）
 
 ## 📁 项目结构
 
@@ -196,6 +197,7 @@ npm run preview
 
 - **[说明.md](docs/说明.md)** - 文档目录索引
 - **[改动记录.md](docs/改动记录.md)** - 项目改动总结
+- **[Conventional-Commits.md](docs/Conventional-Commits.md)** - 提交消息规范指南
 - **[步骤1-横向卷轴基础.md](docs/步骤1-横向卷轴基础.md)** - 基础系统实现
 - **[步骤2-碰撞系统.md](docs/步骤2-碰撞系统.md)** - 障碍物与碰撞系统
 - **[步骤3-拾取与背包系统.md](docs/步骤3-拾取与背包系统.md)** - 物品拾取与背包管理
