@@ -29,6 +29,13 @@ export class Player implements Renderable {
   public hp: number = 100;
   public maxHp: number = 100;
   
+  // 攻击属性
+  public attackDamage: number = 15;
+  public attackRange: number = 40;
+  public attackYThreshold: number = 24;
+  public attackCooldown: number = 0.5; // 秒
+  private lastAttackTime: number = 0;
+  
   private speed: number = 2.5;
   private keys: Set<string> = new Set();
   private walkRect: WalkRect | null = null;
@@ -264,5 +271,57 @@ export class Player implements Renderable {
   reset(): void {
     this.hp = this.maxHp;
     this.keys.clear();
+    this.lastAttackTime = 0;
+  }
+
+  /**
+   * 检查是否可以攻击
+   */
+  canAttack(): boolean {
+    const now = Date.now();
+    const timeSinceLastAttack = (now - this.lastAttackTime) / 1000;
+    return timeSinceLastAttack >= this.attackCooldown;
+  }
+
+  /**
+   * 执行攻击
+   * 核心函数：playerAttack
+   */
+  attack(): boolean {
+    if (!this.canAttack()) {
+      return false;
+    }
+    this.lastAttackTime = Date.now();
+    return true;
+  }
+
+  /**
+   * 命中检测
+   * 核心函数：hitTest
+   * @param enemyX 敌人x坐标
+   * @param enemyY 敌人y坐标
+   * @returns 是否命中
+   */
+  hitTest(enemyX: number, enemyY: number): boolean {
+    const dx = enemyX - this.x;
+    const dy = Math.abs(enemyY - this.y);
+    
+    // 检查x方向距离（攻击范围）
+    if (Math.abs(dx) > this.attackRange) {
+      return false;
+    }
+    
+    // 检查y方向距离（阈值）
+    if (dy > this.attackYThreshold) {
+      return false;
+    }
+    
+    // 检查是否在玩家前方（x方向）
+    // 假设玩家面向右侧（x增大方向）
+    if (dx < 0) {
+      return false; // 敌人在玩家后方
+    }
+    
+    return true;
   }
 }

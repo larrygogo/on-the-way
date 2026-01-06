@@ -13,7 +13,8 @@ import { AuraNode } from './AuraNode';
 import { Channeling, ChannelType } from './Channeling';
 import { SessionTimer } from './SessionTimer';
 import { ExtractionZone } from './ExtractionZone';
-import { Interference } from './Interference';
+import { Enemy } from './Enemy';
+import { GameConfig } from './GameConfig';
 
 /**
  * 主游戏循环
@@ -27,7 +28,7 @@ export class Game {
   private groundLoots: GroundLoot[] = [];
   private auraNodes: AuraNode[] = [];
   private extractionZone: ExtractionZone | null = null;
-  private interferences: Interference[] = [];
+  private enemies: Enemy[] = [];
   private bag: Bag;
   private aura: Aura;
   private channeling: Channeling;
@@ -36,12 +37,7 @@ export class Game {
   private gamePhase: 'RUNNING' | 'RESULT' = 'RUNNING';
   private extractState: 'IDLE' | 'EXTRACTING' | 'SUCCESS' = 'IDLE';
   private extractProgress: number = 0; // 撤离进度（秒）
-  private extractionStartTime: number = 0;
-  private extractionWaveTimes: number[] = [3, 9]; // 撤离期间干扰波次时间（秒）
-  private extractionWaveSpawned: boolean[] = [false, false];
-  private globalWaveTimes: number[] = []; // 全局干扰波次时间（秒，从游戏开始计算）
-  private globalWaveSpawned: boolean[] = [];
-  private gameStartTime: number = 0; // 游戏开始时间
+  private lastEnemySpawnTime: number = 0; // 上次刷新敌人的时间
   private uiState: UIState = {
     uiMode: 'GAME',
     showPickupPrompt: false,
@@ -96,6 +92,14 @@ export class Game {
     // 初始化玩家（放在地面带中间位置）
     this.player = new Player(100, 400, 0);
     
+    // 设置玩家配置
+    this.player.hp = GameConfig.player.hp;
+    this.player.maxHp = GameConfig.player.maxHp;
+    this.player.attackDamage = GameConfig.player.attackDamage;
+    this.player.attackRange = GameConfig.player.attackRange;
+    this.player.attackYThreshold = GameConfig.player.attackYThreshold;
+    this.player.attackCooldown = GameConfig.player.attackCooldown;
+    
     // 设置玩家可走区域
     const walkRect = this.groundBand.getWalkRect();
     this.player.setWalkRect(walkRect);
@@ -115,19 +119,8 @@ export class Game {
     // 初始化撤离点
     this.initExtractionZone();
 
-    // 初始化常驻怪物
-    this.initInterferences();
-
-    // 初始化游戏开始时间和全局干扰波次
-    this.gameStartTime = Date.now();
-    // 设置全局干扰波次时间：每2分钟生成一波（12分钟游戏，共6波）
-    const totalSeconds = 12 * 60;
-    this.globalWaveTimes = [];
-    this.globalWaveSpawned = [];
-    for (let i = 1; i <= 6; i++) {
-      this.globalWaveTimes.push((totalSeconds / 6) * i); // 2分钟、4分钟、6分钟、8分钟、10分钟、12分钟
-      this.globalWaveSpawned.push(false);
-    }
+    // 初始化敌人
+    this.initEnemies();
 
     // 设置输入处理
     this.setupInput();
@@ -216,48 +209,106 @@ export class Game {
   }
 
   /**
-   * 初始化常驻怪物
-   * 核心函数：initInterferences
+   * 初始化敌人
+   * 核心函数：initEnemies
    */
-  private initInterferences(): void {
+  private initEnemies(): void {
+    const walkRect = this.groundBand.getWalkRect();
+    const spawnConfig = GameConfig.enemy.spawn;
+    const spawnPoints = spawnConfig.spawnPoints;
+    
+    // 初始化固定数量的怪物
+    let normalCount = 0;
+    let eliteCount = 0;
+    
+    // 随机打乱spawnPoints顺序
+    const shuffledPoints = [...spawnPoints].sort(() => Math.random() - 0.5);
+    
+    for (const point of shuffledPoints) {
+      // 确保位置在地图范围内
+      const clampedX = Math.max(walkRect.x, Math.min(walkRect.x + walkRect.width, point.x));
+      const clampedY = Math.max(walkRect.y, Math.min(walkRect.y + walkRect.height, point.y));
+      
+      let type: 'NORMAL' | 'ELITE' | null = null;
+      
+      // 优先生成精英怪
+      if (eliteCount < spawnConfig.initialEliteCount) {
+        type = 'ELITE';
+        eliteCount++;
+      } else if (normalCount < spawnConfig.initialNormalCount) {
+        type = 'NORMAL';
+        normalCount++;
+      }
+      
+      if (type) {
+        const enemy = new Enemy(type, clampedX, clampedY);
+        enemy.setObstacles(this.obstacles);
+        enemy.setWalkRect(walkRect);
+        this.enemies.push(enemy);
+      }
+      
+      // 如果已经生成足够的怪物，退出
+      if (normalCount >= spawnConfig.initialNormalCount && eliteCount >= spawnConfig.initialEliteCount) {
+        break;
+      }
+    }
+    
+    this.lastEnemySpawnTime = Date.now();
+  }
+
+  /**
+   * 刷新敌人
+   * 核心函数：refreshEnemies
+   */
+  private refreshEnemies(_deltaTime: number): void {
+    const spawnConfig = GameConfig.enemy.spawn;
+    const now = Date.now();
+    const timeSinceLastSpawn = (now - this.lastEnemySpawnTime) / 1000;
+    
+    // 检查是否到达刷新时间
+    if (timeSinceLastSpawn < spawnConfig.spawnIntervalSec) {
+      return;
+    }
+    
+    // 检查是否超过上限
+    const aliveCount = this.enemies.filter(e => !e.isEnemyDead()).length;
+    if (aliveCount >= spawnConfig.maxAlive) {
+      return;
+    }
+    
+    // 尝试生成新怪物
     const playerPos = this.player.getPosition();
     const walkRect = this.groundBand.getWalkRect();
+    const spawnPoints = spawnConfig.spawnPoints;
     
-    // 在地图不同区域生成常驻怪物（共8-10个）
-    const initialMonsters = [
-      // 左侧区域
-      { x: 300, y: 300 },
-      { x: 400, y: 450 },
-      { x: 500, y: 350 },
+    // 随机打乱spawnPoints，找到合适的刷新点
+    const shuffledPoints = [...spawnPoints].sort(() => Math.random() - 0.5);
+    
+    for (const point of shuffledPoints) {
+      // 检查距离玩家是否足够远
+      const dx = point.x - playerPos.x;
+      const dy = point.y - playerPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
       
-      // 中间区域
-      { x: 700, y: 280 },
-      { x: 800, y: 420 },
-      { x: 900, y: 380 },
+      if (distance < spawnConfig.minSpawnDistanceToPlayer) {
+        continue; // 太近了，跳过
+      }
       
-      // 右侧区域
-      { x: 1200, y: 320 },
-      { x: 1400, y: 400 },
-      { x: 1600, y: 360 },
-    ];
-    
-    // 添加一些随机位置的怪物
-    for (let i = 0; i < 3; i++) {
-      const randomX = walkRect.x + Math.random() * walkRect.width;
-      const randomY = walkRect.y + Math.random() * walkRect.height;
-      initialMonsters.push({ x: randomX, y: randomY });
-    }
-    
-    // 生成干扰实体
-    for (const pos of initialMonsters) {
       // 确保位置在地图范围内
-      const clampedX = Math.max(walkRect.x, Math.min(walkRect.x + walkRect.width, pos.x));
-      const clampedY = Math.max(walkRect.y, Math.min(walkRect.y + walkRect.height, pos.y));
+      const clampedX = Math.max(walkRect.x, Math.min(walkRect.x + walkRect.width, point.x));
+      const clampedY = Math.max(walkRect.y, Math.min(walkRect.y + walkRect.height, point.y));
       
-      const interference = new Interference(clampedX, clampedY, playerPos.x, playerPos.y);
-      this.interferences.push(interference);
+      // 生成普通怪
+      const enemy = new Enemy('NORMAL', clampedX, clampedY);
+      enemy.setObstacles(this.obstacles);
+      enemy.setWalkRect(walkRect);
+      this.enemies.push(enemy);
+      
+      this.lastEnemySpawnTime = now;
+      break; // 每次只生成一个
     }
   }
+
 
   /**
    * 设置输入处理
@@ -581,8 +632,6 @@ export class Game {
     if (this.extractState === 'IDLE' && this.aura.getCurrent() >= this.extractionZone.costAura) {
       this.extractState = 'EXTRACTING';
       this.extractProgress = 0;
-      this.extractionStartTime = Date.now();
-      this.extractionWaveSpawned = [false, false];
       
       // 进入 CHANNELING 模式显示进度
       this.uiState.uiMode = 'CHANNELING';
@@ -605,9 +654,6 @@ export class Game {
       this.uiState.uiMode = 'GAME';
       this.uiState.channelType = null;
       this.uiState.channelProgress = 0;
-      
-      // 清除干扰
-      this.interferences = [];
     }
   }
 
@@ -652,52 +698,6 @@ export class Game {
     }
   }
 
-  /**
-   * 生成干扰波次（撤离期间）
-   * 核心函数：spawnInterferenceWave
-   */
-  private spawnInterferenceWave(_waveIndex: number): void {
-    if (!this.extractionZone) return;
-    
-    const count = 3 + Math.floor(Math.random() * 3); // 3-5 个
-    const playerPos = this.player.getPosition();
-    
-    for (let i = 0; i < count; i++) {
-      // 在撤离点周围随机位置生成
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 50 + Math.random() * 50; // 距离撤离点 50-100
-      const x = this.extractionZone.x + Math.cos(angle) * distance;
-      const y = this.extractionZone.y + Math.sin(angle) * distance;
-      
-      const interference = new Interference(x, y, playerPos.x, playerPos.y);
-      this.interferences.push(interference);
-    }
-  }
-
-  /**
-   * 生成全局干扰波次（游戏过程中）
-   * 核心函数：spawnGlobalInterferenceWave
-   */
-  private spawnGlobalInterferenceWave(): void {
-    const count = 2 + Math.floor(Math.random() * 3); // 2-4 个
-    const playerPos = this.player.getPosition();
-    
-    // 在玩家周围随机位置生成
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 100 + Math.random() * 100; // 距离玩家 100-200
-      const x = playerPos.x + Math.cos(angle) * distance;
-      const y = playerPos.y + Math.sin(angle) * distance;
-      
-      // 确保生成位置在地图范围内
-      const walkRect = this.groundBand.getWalkRect();
-      const clampedX = Math.max(walkRect.x, Math.min(walkRect.x + walkRect.width, x));
-      const clampedY = Math.max(walkRect.y, Math.min(walkRect.y + walkRect.height, y));
-      
-      const interference = new Interference(clampedX, clampedY, playerPos.x, playerPos.y);
-      this.interferences.push(interference);
-    }
-  }
 
   /**
    * 成功撤离
@@ -738,9 +738,6 @@ export class Game {
       }
     }
     
-    // 清除干扰
-    this.interferences = [];
-    
     // 更新 UI 状态
     this.uiState.uiMode = 'GAME';
     this.uiState.channelProgress = 0;
@@ -772,25 +769,10 @@ export class Game {
     // 重新初始化地面掉落物
     this.initGroundLoots();
     
-    // 清除干扰并重新初始化常驻怪物
-    this.interferences = [];
-    this.initInterferences();
-    
     // 重置游戏阶段和撤离状态
     this.gamePhase = 'RUNNING';
     this.extractState = 'IDLE';
     this.extractProgress = 0;
-    
-    // 重置游戏开始时间和全局干扰波次
-    this.gameStartTime = Date.now();
-    // 设置全局干扰波次时间：每2分钟生成一波（12分钟游戏，共6波）
-    const totalSeconds = 12 * 60;
-    this.globalWaveTimes = [];
-    this.globalWaveSpawned = [];
-    for (let i = 1; i <= 6; i++) {
-      this.globalWaveTimes.push((totalSeconds / 6) * i); // 2分钟、4分钟、6分钟、8分钟、10分钟、12分钟
-      this.globalWaveSpawned.push(false);
-    }
     
     // 重置 UI 状态
     this.uiState.resultReason = null;
@@ -991,34 +973,37 @@ export class Game {
         return;
       }
       
-      // 检查全局干扰波次生成（基于游戏时间）
-      const gameElapsed = (Date.now() - this.gameStartTime) / 1000; // 游戏开始后的秒数
-      for (let i = 0; i < this.globalWaveTimes.length; i++) {
-        if (gameElapsed >= this.globalWaveTimes[i] && !this.globalWaveSpawned[i]) {
-          this.spawnGlobalInterferenceWave();
-          this.globalWaveSpawned[i] = true;
-        }
-      }
-      
-      // 更新全局干扰实体（非撤离期间）
+      // 刷新敌人（非撤离期间）
       if (this.extractState !== 'EXTRACTING') {
-        for (const interference of this.interferences) {
-          interference.update();
+        this.refreshEnemies(deltaTime);
+      }
+
+      // 更新敌人（非撤离期间）
+      if (this.extractState !== 'EXTRACTING') {
+        const playerPos = this.player.getPosition();
+        
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+          const enemy = this.enemies[i];
           
-          // 检查与玩家碰撞
-          if (interference.checkCollision(this.player.x, this.player.y)) {
-            // 扣血
-            this.player.takeDamage(interference.damage);
-            if (this.player.isDead()) {
-              this.failExtraction('DEAD');
-              return;
-            }
-            // 移除该干扰实体
-            const index = this.interferences.indexOf(interference);
-            if (index !== -1) {
-              this.interferences.splice(index, 1);
-            }
+          if (enemy.isEnemyDead()) {
+            // 移除已死亡的敌人
+            this.enemies.splice(i, 1);
+            continue;
           }
+
+          // 更新敌人AI（包括移动和攻击）
+          enemy.updateAI(
+            deltaTime,
+            playerPos.x,
+            playerPos.y,
+            (damage: number) => {
+              // 敌人攻击回调：对玩家造成伤害
+              this.player.takeDamage(damage, this.extractionZone || undefined);
+              if (this.player.isDead()) {
+                this.failExtraction('DEAD');
+              }
+            }
+          );
         }
       }
     }
@@ -1040,38 +1025,6 @@ export class Game {
       // 更新相机跟随
       this.camera.follow(this.player.x, this.player.y);
       this.camera.update();
-      
-      // 处理干扰波次和碰撞（仅在撤离中）
-      const elapsed = (Date.now() - this.extractionStartTime) / 1000;
-      
-      // 检查是否需要生成干扰波次
-      for (let i = 0; i < this.extractionWaveTimes.length; i++) {
-        if (elapsed >= this.extractionWaveTimes[i] && !this.extractionWaveSpawned[i]) {
-          this.spawnInterferenceWave(i);
-          this.extractionWaveSpawned[i] = true;
-        }
-      }
-      
-      // 更新干扰实体
-      for (const interference of this.interferences) {
-        interference.update();
-        
-        // 检查与玩家碰撞（伤害处理在 Player.takeDamage 中，会根据是否在区域内决定是否扣血）
-        if (interference.checkCollision(this.player.x, this.player.y)) {
-          // 尝试扣血（如果不在区域内会扣血，在区域内不会扣血）
-          this.player.takeDamage(interference.damage, this.extractionZone || undefined);
-          if (this.player.isDead()) {
-            this.failExtraction('DEAD');
-            return;
-          }
-          // 如果不在区域内且未死亡，离开区域会取消撤离（在 updateExtraction 中处理）
-          // 移除该干扰实体
-          const index = this.interferences.indexOf(interference);
-          if (index !== -1) {
-            this.interferences.splice(index, 1);
-          }
-        }
-      }
       
       return;
     }
@@ -1168,13 +1121,13 @@ export class Game {
    * 渲染游戏画面
    */
   private render(): void {
-    // 收集所有可渲染对象（包括地面掉落物、灵气点、撤离点和干扰实体）
+    // 收集所有可渲染对象（包括地面掉落物、灵气点、撤离点和敌人）
     const renderables: Renderable[] = [
       this.groundBand,
       ...this.obstacles,
       ...this.groundLoots,
       ...this.auraNodes,
-      ...this.interferences,
+      ...this.enemies,
       this.player
     ];
 
