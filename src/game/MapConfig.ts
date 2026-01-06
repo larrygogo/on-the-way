@@ -112,6 +112,15 @@ export interface EnemyConfig {
 }
 
 /**
+ * 传送门生成点配置
+ */
+export interface PortalSpawnConfig {
+  portalId: string; // 传送门ID（用于匹配 dungeonConfig.links）
+  x: number;
+  y: number;
+}
+
+/**
  * 地图配置
  */
 export interface MapConfig {
@@ -136,4 +145,10 @@ export interface MapConfig {
   
   // 敌人配置
   enemies: EnemyConfig;
+  
+  // 玩家出生点集合（可选）
+  spawnPoints?: Point[];
+  
+  // 传送门生成点集合（可选）
+  portalSpawns?: PortalSpawnConfig[];
 }

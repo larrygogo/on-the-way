@@ -613,6 +613,8 @@ export class UI {
       typeText = '转移中';
     } else if (uiState.channelType === 'EXTRACT') {
       typeText = '撤离中';
+    } else if (uiState.channelType === 'PORTAL') {
+      typeText = '传送中';
     }
 
     // 绘制背景遮罩

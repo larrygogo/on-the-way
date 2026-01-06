@@ -1,0 +1,23 @@
+{
+  "dungeonId": "demo_dungeon",
+  "entryMapId": "map_001",
+  "maps": [
+    { "mapId": "map_001", "type": "entry" },
+    { "mapId": "map_002", "type": "normal" },
+    { "mapId": "map_003", "type": "normal" },
+    { "mapId": "map_004", "type": "normal" },
+    { "mapId": "map_005", "type": "boss" }
+  ],
+  "links": [
+    { "fromMapId": "map_001", "portalId": "portal_1_2", "toMapId": "map_002", "portalTemplateId": "standard" },
+    { "fromMapId": "map_002", "portalId": "portal_2_3", "toMapId": "map_003", "portalTemplateId": "standard" },
+    { "fromMapId": "map_002", "portalId": "portal_2_4", "toMapId": "map_004", "portalTemplateId": "standard" },
+    { "fromMapId": "map_003", "portalId": "portal_3_5", "toMapId": "map_005", "portalTemplateId": "boss" },
+    { "fromMapId": "map_004", "portalId": "portal_4_5", "toMapId": "map_005", "portalTemplateId": "boss" }
+  ],
+  "rules": {
+    "allowBacktrack": true,
+    "maxDepth": 5
+  }
+}
+

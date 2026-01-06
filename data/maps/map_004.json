@@ -1,0 +1,63 @@
+{
+  "id": "map_004",
+  "name": "熔岩洞穴",
+  "walkArea": {
+    "type": "rect",
+    "rect": {
+      "x": 0,
+      "y": 200,
+      "width": 2000,
+      "height": 400
+    }
+  },
+  "obstacles": [
+    { "x": 250, "y": 350, "footprintWidth": 30, "footprintHeight": 30, "visualWidth": 40, "visualHeight": 40 },
+    { "x": 550, "y": 300, "footprintWidth": 30, "footprintHeight": 30, "visualWidth": 40, "visualHeight": 40 },
+    { "x": 850, "y": 450, "footprintWidth": 30, "footprintHeight": 30, "visualWidth": 40, "visualHeight": 40 },
+    { "x": 1150, "y": 350, "footprintWidth": 30, "footprintHeight": 30, "visualWidth": 40, "visualHeight": 40 },
+    { "x": 1450, "y": 400, "footprintWidth": 30, "footprintHeight": 30, "visualWidth": 40, "visualHeight": 40 }
+  ],
+  "auraNodes": [
+    { "x": 200, "y": 350, "collectSeconds": 2.0, "gainAmount": 25 },
+    { "x": 500, "y": 300, "collectSeconds": 2.0, "gainAmount": 25 },
+    { "x": 800, "y": 450, "collectSeconds": 2.0, "gainAmount": 25 },
+    { "x": 1100, "y": 350, "collectSeconds": 2.0, "gainAmount": 25 },
+    { "x": 1400, "y": 400, "collectSeconds": 2.0, "gainAmount": 25 }
+  ],
+  "extractionZone": {
+    "x": 1900,
+    "y": 400,
+    "radius": 36,
+    "channelSeconds": 15,
+    "costAura": 100
+  },
+  "lootSpawns": [
+    { "x": 150, "y": 350, "itemType": "POTION", "itemName": "生命药水" },
+    { "x": 450, "y": 300, "itemType": "EQUIPMENT", "itemName": "长剑" },
+    { "x": 750, "y": 450, "itemType": "POTION", "itemName": "魔法药水" },
+    { "x": 1050, "y": 350, "itemType": "EQUIPMENT", "itemName": "盾牌" },
+    { "x": 1350, "y": 400, "itemType": "POTION", "itemName": "力量药水" }
+  ],
+  "enemies": {
+    "spawnPoints": [
+      { "x": 250, "y": 330 }, { "x": 400, "y": 350 }, { "x": 550, "y": 250 },
+      { "x": 650, "y": 230 }, { "x": 800, "y": 370 }, { "x": 950, "y": 390 },
+      { "x": 1100, "y": 200 }, { "x": 1200, "y": 190 }, { "x": 1350, "y": 340 },
+      { "x": 1500, "y": 360 }, { "x": 1700, "y": 270 }, { "x": 1850, "y": 290 }
+    ],
+    "initial": { "normalCount": 10, "eliteCount": 2 },
+    "refresh": {
+      "intervalSec": 6.0,
+      "maxAlive": 16,
+      "minDistanceToPlayer": 160,
+      "weights": { "normal": 0.75, "elite": 0.25 }
+    }
+  },
+  "spawnPoints": [
+    { "x": 100, "y": 400 }
+  ],
+  "portalSpawns": [
+    { "portalId": "portal_4_5", "x": 1800, "y": 400 }
+  ]
+}
+

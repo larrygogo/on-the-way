@@ -1,0 +1,28 @@
+# Cursor 规则配置
+
+## Plan 保存规则
+
+每次创建新的计划（Plan）时，必须将计划的 Markdown 文件保存到 `.cursor/plans` 目录下。
+
+### 具体要求：
+
+1. **保存位置**：所有计划文件必须保存在项目根目录下的 `.cursor/plans` 目录中
+2. **文件命名**：计划文件应使用有意义的名称，格式为 `{plan-name}.md` 或 `{timestamp}-{plan-name}.md`
+3. **文件格式**：所有计划文件必须使用 Markdown 格式（`.md` 扩展名）
+4. **目录检查**：在保存计划前，确保 `.cursor/plans` 目录存在；如不存在，则先创建该目录
+
+### 实施步骤：
+
+当需要创建新计划时：
+1. 检查 `.cursor/plans` 目录是否存在，如不存在则创建
+2. 将计划内容保存为 Markdown 文件到 `.cursor/plans` 目录
+3. 使用合适的文件名（建议包含时间戳或描述性名称）
+4. 确保文件扩展名为 `.md`
+
+### 示例：
+
+- ✅ 正确：`.cursor/plans/feature-implementation.md`
+- ✅ 正确：`.cursor/plans/2025-01-06-refactoring-plan.md`
+- ❌ 错误：`plan.md`（不在指定目录）
+- ❌ 错误：`.cursor/plan.md`（不在 plans 子目录）
+

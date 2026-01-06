@@ -1,0 +1,57 @@
+{
+  "id": "map_005",
+  "name": "Boss 房间",
+  "walkArea": {
+    "type": "rect",
+    "rect": {
+      "x": 0,
+      "y": 100,
+      "width": 2000,
+      "height": 500
+    }
+  },
+  "obstacles": [
+    { "x": 400, "y": 300, "footprintWidth": 40, "footprintHeight": 40, "visualWidth": 50, "visualHeight": 50 },
+    { "x": 800, "y": 250, "footprintWidth": 40, "footprintHeight": 40, "visualWidth": 50, "visualHeight": 50 },
+    { "x": 1200, "y": 400, "footprintWidth": 40, "footprintHeight": 40, "visualWidth": 50, "visualHeight": 50 },
+    { "x": 1600, "y": 300, "footprintWidth": 40, "footprintHeight": 40, "visualWidth": 50, "visualHeight": 50 }
+  ],
+  "auraNodes": [
+    { "x": 300, "y": 300, "collectSeconds": 2.0, "gainAmount": 30 },
+    { "x": 700, "y": 250, "collectSeconds": 2.0, "gainAmount": 30 },
+    { "x": 1100, "y": 400, "collectSeconds": 2.0, "gainAmount": 30 },
+    { "x": 1500, "y": 300, "collectSeconds": 2.0, "gainAmount": 30 }
+  ],
+  "extractionZone": {
+    "x": 1900,
+    "y": 350,
+    "radius": 36,
+    "channelSeconds": 15,
+    "costAura": 100
+  },
+  "lootSpawns": [
+    { "x": 200, "y": 300, "itemType": "EQUIPMENT", "itemName": "传说之剑" },
+    { "x": 600, "y": 250, "itemType": "EQUIPMENT", "itemName": "传说之盾" },
+    { "x": 1000, "y": 400, "itemType": "EQUIPMENT", "itemName": "传说之甲" },
+    { "x": 1400, "y": 300, "itemType": "EQUIPMENT", "itemName": "传说之杖" }
+  ],
+  "enemies": {
+    "spawnPoints": [
+      { "x": 500, "y": 280 }, { "x": 700, "y": 300 }, { "x": 900, "y": 200 },
+      { "x": 1100, "y": 180 }, { "x": 1300, "y": 320 }, { "x": 1500, "y": 340 },
+      { "x": 1700, "y": 250 }, { "x": 1850, "y": 270 }
+    ],
+    "initial": { "normalCount": 5, "eliteCount": 5 },
+    "refresh": {
+      "intervalSec": 5.0,
+      "maxAlive": 12,
+      "minDistanceToPlayer": 140,
+      "weights": { "normal": 0.5, "elite": 0.5 }
+    }
+  },
+  "spawnPoints": [
+    { "x": 100, "y": 350 }
+  ],
+  "portalSpawns": []
+}
+

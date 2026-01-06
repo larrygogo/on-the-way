@@ -1,0 +1,20 @@
+[
+  {
+    "templateId": "standard",
+    "activationTime": 3.0,
+    "costSpirit": 0,
+    "radius": 40,
+    "cancelOnLeave": true,
+    "oneWay": false
+  },
+  {
+    "templateId": "boss",
+    "activationTime": 5.0,
+    "costSpirit": 50,
+    "radius": 40,
+    "cancelOnLeave": true,
+    "oneWay": true,
+    "hint": "危险区域"
+  }
+]
+

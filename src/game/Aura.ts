@@ -43,4 +43,11 @@ export class Aura {
     }
     return false;
   }
+
+  /**
+   * 设置当前灵气值（用于地图切换时恢复状态）
+   */
+  setCurrent(value: number): void {
+    this.current = Math.max(0, Math.min(value, this.cap));
+  }
 }

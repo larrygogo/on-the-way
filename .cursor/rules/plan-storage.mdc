@@ -1,0 +1,23 @@
+---
+description: 自动将新建的计划保存到 .cursor/plans 目录
+alwaysApply: true
+---
+
+# Plan 存储规则
+
+每次创建新的计划时，自动将其保存为 Markdown 文件，并存储在项目根目录下的 `.cursor/plans` 目录中。
+
+## 规则说明
+
+- 确保 `.cursor/plans` 目录存在；如果不存在，则创建该目录
+- 计划文件应以时间戳或唯一标识符命名，以避免文件名冲突
+- 文件扩展名应为 `.md`
+- 计划文件的完整路径格式：`.cursor/plans/{plan-name}.md` 或 `.cursor/plans/{timestamp}-{plan-name}.md`
+
+## 实施要求
+
+当用户创建新计划时：
+1. 检查 `.cursor/plans` 目录是否存在，如不存在则创建
+2. 将计划内容保存为 Markdown 文件到 `.cursor/plans` 目录
+3. 使用合适的文件名（建议包含时间戳或唯一标识符）
+4. 确保文件扩展名为 `.md`

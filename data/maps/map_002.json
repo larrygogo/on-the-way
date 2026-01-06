@@ -267,9 +267,16 @@
       "maxAlive": 16,
       "minDistanceToPlayer": 160,
       "weights": {
-        "normal": 0.75,
-        "elite": 0.25
-      }
+      "normal": 0.75,
+      "elite": 0.25
     }
-  }
+  },
+  "spawnPoints": [
+    { "x": 100, "y": 300 }
+  ],
+  "portalSpawns": [
+    { "portalId": "portal_2_3", "x": 1800, "y": 200 },
+    { "portalId": "portal_2_4", "x": 1800, "y": 500 }
+  ]
+}
 }

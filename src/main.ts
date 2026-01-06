@@ -11,10 +11,11 @@ if (!canvas) {
 // 创建游戏实例
 const game = new Game(canvas);
 
-// 异步加载地图并启动游戏
+// 异步加载秘境并启动游戏
 (async () => {
   try {
-    await game.initFromMap('map_002');
+    // 进入秘境（demo_dungeon）
+    await game.enterDungeon('demo_dungeon');
     game.start();
   } catch (error) {
     console.error('游戏启动失败:', error);
