@@ -1,17 +1,13 @@
 import { Camera } from './Camera';
 import { Renderable } from './Renderable';
 import { Obstacle } from './Obstacle';
-import { Collision, Rect } from './Collision';
+import { Collision, Rect, Point } from './Collision';
+import { WalkAreaConfig } from './MapConfig';
 
 /**
- * 可走区域矩形
+ * 可走区域（矩形或多边形）
  */
-export interface WalkRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+export type WalkArea = WalkAreaConfig;
 
 /**
  * 玩家实体
@@ -38,7 +34,7 @@ export class Player implements Renderable {
   
   private speed: number = 2.5;
   private keys: Set<string> = new Set();
-  private walkRect: WalkRect | null = null;
+  private walkArea: WalkArea | null = null;
   private obstacles: Obstacle[] = [];
 
   constructor(x: number = 0, y: number = 0, z: number = 0) {
@@ -50,8 +46,8 @@ export class Player implements Renderable {
   /**
    * 设置可走区域限制
    */
-  setWalkRect(rect: WalkRect): void {
-    this.walkRect = rect;
+  setWalkArea(area: WalkArea): void {
+    this.walkArea = area;
   }
 
   /**
@@ -73,13 +69,24 @@ export class Player implements Renderable {
   }
 
   /**
-   * 限制坐标在 walkRect 内
+   * 限制坐标在 walkArea 内
    */
   private clampPosition(): void {
-    if (!this.walkRect) return;
+    if (!this.walkArea) return;
 
-    this.x = Math.max(this.walkRect.x, Math.min(this.walkRect.x + this.walkRect.width, this.x));
-    this.y = Math.max(this.walkRect.y, Math.min(this.walkRect.y + this.walkRect.height, this.y));
+    const point: Point = { x: this.x, y: this.y };
+
+    if (this.walkArea.type === 'rect') {
+      // 矩形边界限制
+      const rect = this.walkArea.rect;
+      this.x = Math.max(rect.x, Math.min(rect.x + rect.width, this.x));
+      this.y = Math.max(rect.y, Math.min(rect.y + rect.height, this.y));
+    } else if (this.walkArea.type === 'polygon') {
+      // 多边形边界限制
+      const clamped = Collision.clampPointToPolygon(point, this.walkArea.points);
+      this.x = clamped.x;
+      this.y = clamped.y;
+    }
   }
 
   /**

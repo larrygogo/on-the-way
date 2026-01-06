@@ -8,6 +8,16 @@ if (!canvas) {
   throw new Error('找不到 Canvas 元素');
 }
 
-// 创建并启动游戏
+// 创建游戏实例
 const game = new Game(canvas);
-game.start();
+
+// 异步加载地图并启动游戏
+(async () => {
+  try {
+    await game.initFromMap('map_002');
+    game.start();
+  } catch (error) {
+    console.error('游戏启动失败:', error);
+    alert('游戏启动失败，请检查控制台错误信息');
+  }
+})();

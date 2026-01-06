@@ -1,37 +1,23 @@
 import { Camera } from './Camera';
 import { Renderable } from './Renderable';
+import { WalkAreaConfig } from './MapConfig';
 
 /**
  * 地面带
- * 绘制可走区域，显示上下边界线
+ * 绘制可走区域，显示边界线
  */
 export class GroundBand implements Renderable {
-  private x: number;
-  private width: number;
-  private height: number;
-  private topY: number;  // 上边界 Y 坐标
-  private bottomY: number; // 下边界 Y 坐标
+  private walkArea: WalkAreaConfig;
 
-  constructor(x: number = 0, y: number = 0, width: number = 2000, height: number = 400) {
-    this.x = x;
-    this.width = width;
-    this.height = height;
-    
-    // 计算上下边界（可以做成轻微梯形）
-    this.topY = y;
-    this.bottomY = y + height;
+  constructor(walkArea: WalkAreaConfig) {
+    this.walkArea = walkArea;
   }
 
   /**
-   * 获取可走区域矩形
+   * 获取可走区域
    */
-  getWalkRect(): { x: number; y: number; width: number; height: number } {
-    return {
-      x: this.x,
-      y: this.topY,
-      width: this.width,
-      height: this.height
-    };
+  getWalkArea(): WalkAreaConfig {
+    return this.walkArea;
   }
 
   /**
@@ -45,42 +31,76 @@ export class GroundBand implements Renderable {
    * 渲染地面带
    */
   render(ctx: CanvasRenderingContext2D, camera: Camera): void {
-    // 获取屏幕坐标
-    const topLeft = camera.worldToScreen(this.x, this.topY);
-    const topRight = camera.worldToScreen(this.x + this.width, this.topY);
-    const bottomLeft = camera.worldToScreen(this.x, this.bottomY);
-    const bottomRight = camera.worldToScreen(this.x + this.width, this.bottomY);
-
-    // 绘制地面区域（轻微梯形，扁平风格）
     ctx.save();
     ctx.fillStyle = '#2a2a2a';  // 深灰色地面
     ctx.beginPath();
-    ctx.moveTo(topLeft.sx, topLeft.sy);
-    ctx.lineTo(topRight.sx, topRight.sy);
-    ctx.lineTo(bottomRight.sx, bottomRight.sy);
-    ctx.lineTo(bottomLeft.sx, bottomLeft.sy);
+
+    if (this.walkArea.type === 'rect') {
+      // 矩形区域
+      const rect = this.walkArea.rect;
+      const topLeft = camera.worldToScreen(rect.x, rect.y);
+      const topRight = camera.worldToScreen(rect.x + rect.width, rect.y);
+      const bottomLeft = camera.worldToScreen(rect.x, rect.y + rect.height);
+      const bottomRight = camera.worldToScreen(rect.x + rect.width, rect.y + rect.height);
+
+      ctx.moveTo(topLeft.sx, topLeft.sy);
+      ctx.lineTo(topRight.sx, topRight.sy);
+      ctx.lineTo(bottomRight.sx, bottomRight.sy);
+      ctx.lineTo(bottomLeft.sx, bottomLeft.sy);
+    } else {
+      // 多边形区域
+      const points = this.walkArea.points;
+      if (points.length > 0) {
+        const firstPoint = camera.worldToScreen(points[0].x, points[0].y);
+        ctx.moveTo(firstPoint.sx, firstPoint.sy);
+        for (let i = 1; i < points.length; i++) {
+          const point = camera.worldToScreen(points[i].x, points[i].y);
+          ctx.lineTo(point.sx, point.sy);
+        }
+      }
+    }
+
     ctx.closePath();
     ctx.fill();
     ctx.restore();
 
-    // 绘制上边界线
+    // 绘制边界线
     ctx.save();
     ctx.strokeStyle = '#666666';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(topLeft.sx, topLeft.sy);
-    ctx.lineTo(topRight.sx, topRight.sy);
-    ctx.stroke();
-    ctx.restore();
 
-    // 绘制下边界线
-    ctx.save();
-    ctx.strokeStyle = '#666666';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(bottomLeft.sx, bottomLeft.sy);
-    ctx.lineTo(bottomRight.sx, bottomRight.sy);
-    ctx.stroke();
+    if (this.walkArea.type === 'rect') {
+      const rect = this.walkArea.rect;
+      const topLeft = camera.worldToScreen(rect.x, rect.y);
+      const topRight = camera.worldToScreen(rect.x + rect.width, rect.y);
+      const bottomLeft = camera.worldToScreen(rect.x, rect.y + rect.height);
+      const bottomRight = camera.worldToScreen(rect.x + rect.width, rect.y + rect.height);
+
+      // 上边界
+      ctx.moveTo(topLeft.sx, topLeft.sy);
+      ctx.lineTo(topRight.sx, topRight.sy);
+      ctx.stroke();
+
+      // 下边界
+      ctx.moveTo(bottomLeft.sx, bottomLeft.sy);
+      ctx.lineTo(bottomRight.sx, bottomRight.sy);
+      ctx.stroke();
+    } else {
+      // 多边形边界
+      const points = this.walkArea.points;
+      if (points.length > 0) {
+        const firstPoint = camera.worldToScreen(points[0].x, points[0].y);
+        ctx.moveTo(firstPoint.sx, firstPoint.sy);
+        for (let i = 1; i < points.length; i++) {
+          const point = camera.worldToScreen(points[i].x, points[i].y);
+          ctx.lineTo(point.sx, point.sy);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+
     ctx.restore();
   }
 }

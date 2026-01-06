@@ -5,7 +5,7 @@ import { Renderer } from './Renderer';
 import { Obstacle } from './Obstacle';
 import { Renderable } from './Renderable';
 import { GroundLoot } from './GroundLoot';
-import { ItemInstance, ItemType } from './Item';
+import { ItemInstance } from './Item';
 import { Bag } from './Bag';
 import { UI, UIState } from './UI';
 import { Aura } from './Aura';
@@ -15,6 +15,9 @@ import { SessionTimer } from './SessionTimer';
 import { ExtractionZone } from './ExtractionZone';
 import { Enemy } from './Enemy';
 import { GameConfig } from './GameConfig';
+import { MapLoader } from './MapLoader';
+import { WorldBuilder } from './WorldBuilder';
+import { Collision } from './Collision';
 
 /**
  * 主游戏循环
@@ -23,7 +26,7 @@ export class Game {
   private renderer: Renderer;
   private camera: Camera;
   private player: Player;
-  private groundBand: GroundBand;
+  private groundBand!: GroundBand; // 将在 initFromMap 中初始化
   private obstacles: Obstacle[] = [];
   private groundLoots: GroundLoot[] = [];
   private auraNodes: AuraNode[] = [];
@@ -38,6 +41,12 @@ export class Game {
   private extractState: 'IDLE' | 'EXTRACTING' | 'SUCCESS' = 'IDLE';
   private extractProgress: number = 0; // 撤离进度（秒）
   private lastEnemySpawnTime: number = 0; // 上次刷新敌人的时间
+  private enemyRefreshConfig: {
+    intervalSec: number;
+    maxAlive: number;
+    minDistanceToPlayer: number;
+    weights?: { normal?: number; elite?: number };
+  } | null = null; // 敌人刷新配置（从地图配置加载）
   private uiState: UIState = {
     uiMode: 'GAME',
     showPickupPrompt: false,
@@ -86,10 +95,7 @@ export class Game {
     // 初始化全局倒计时
     this.sessionTimer = new SessionTimer(12 * 60);
 
-    // 初始化地面带（宽 2000，高 400，从 y=200 开始）
-    this.groundBand = new GroundBand(0, 200, 2000, 400);
-
-    // 初始化玩家（放在地面带中间位置）
+    // 初始化玩家（临时位置，后续从地图配置加载）
     this.player = new Player(100, 400, 0);
     
     // 设置玩家配置
@@ -99,28 +105,6 @@ export class Game {
     this.player.attackRange = GameConfig.player.attackRange;
     this.player.attackYThreshold = GameConfig.player.attackYThreshold;
     this.player.attackCooldown = GameConfig.player.attackCooldown;
-    
-    // 设置玩家可走区域
-    const walkRect = this.groundBand.getWalkRect();
-    this.player.setWalkRect(walkRect);
-
-    // 初始化障碍物（至少 5 个，分布在不同 x/y）
-    this.initObstacles();
-    
-    // 设置玩家障碍物列表
-    this.player.setObstacles(this.obstacles);
-
-    // 初始化地面掉落物
-    this.initGroundLoots();
-
-    // 初始化灵气点
-    this.initAuraNodes();
-
-    // 初始化撤离点
-    this.initExtractionZone();
-
-    // 初始化敌人
-    this.initEnemies();
 
     // 设置输入处理
     this.setupInput();
@@ -143,117 +127,59 @@ export class Game {
   }
 
   /**
-   * 初始化障碍物
+   * 从地图配置初始化世界
+   * @param mapId 地图ID（例如 "map_001"）
    */
-  private initObstacles(): void {
-    this.obstacles = [
-      new Obstacle(200, 300, 30, 30, 40, 40),
-      new Obstacle(400, 250, 30, 30, 40, 40),
-      new Obstacle(600, 450, 30, 30, 40, 40),
-      new Obstacle(800, 350, 20, 20, 25, 50),
-      new Obstacle(1000, 300, 30, 30, 40, 40),
-      new Obstacle(1200, 400, 20, 20, 25, 50),
-    ];
-  }
-
-  /**
-   * 初始化地面掉落物
-   */
-  private initGroundLoots(): void {
-    // 创建足够的初始掉落物用于测试（总占格数超过背包容量）
-    // 普通区容量为 8，这里创建总占格数约 12-14 的物品
-    this.groundLoots = [
-      // 左侧区域
-      new GroundLoot(150, 350, new ItemInstance(ItemType.POTION, '生命药水')),
-      new GroundLoot(200, 300, new ItemInstance(ItemType.POTION, '魔法药水')),
-      new GroundLoot(250, 400, new ItemInstance(ItemType.EQUIPMENT, '长剑')),
+  async initFromMap(mapId: string): Promise<void> {
+    try {
+      // 加载地图配置
+      const mapConfig = await MapLoader.loadMap(mapId);
       
-      // 中间区域
-      new GroundLoot(350, 350, new ItemInstance(ItemType.POTION, '力量药水')),
-      new GroundLoot(400, 300, new ItemInstance(ItemType.EQUIPMENT, '盾牌')),
-      new GroundLoot(450, 400, new ItemInstance(ItemType.POTION, '敏捷药水')),
+      // 从配置构建世界
+      const world = WorldBuilder.buildFromConfig(mapConfig);
       
-      // 右侧区域
-      new GroundLoot(650, 350, new ItemInstance(ItemType.EQUIPMENT, '护甲')),
-      new GroundLoot(700, 300, new ItemInstance(ItemType.POTION, '耐力药水')),
-      new GroundLoot(750, 400, new ItemInstance(ItemType.POTION, '幸运药水')),
+      // 设置地面带
+      this.groundBand = world.groundBand;
       
-      // 更右侧区域
-      new GroundLoot(850, 350, new ItemInstance(ItemType.EQUIPMENT, '法杖')),
-      new GroundLoot(900, 300, new ItemInstance(ItemType.POTION, '恢复药水')),
-      new GroundLoot(950, 400, new ItemInstance(ItemType.POTION, '经验药水')),
-    ];
-    // 总占格数：1+1+2+1+2+1+2+1+1+2+1+1 = 16 格（足够填满背包并测试取舍）
-  }
-
-  /**
-   * 初始化灵气点
-   */
-  private initAuraNodes(): void {
-    // 在地图上分布一些灵气点
-    this.auraNodes = [
-      new AuraNode(300, 350, 2.0, 20),
-      new AuraNode(500, 300, 2.0, 20),
-      new AuraNode(700, 400, 2.0, 20),
-      new AuraNode(900, 350, 2.0, 20),
-      new AuraNode(1100, 300, 2.0, 20),
-    ];
-  }
-
-  /**
-   * 初始化撤离点
-   */
-  private initExtractionZone(): void {
-    // 在地图右侧放置撤离点
-    this.extractionZone = new ExtractionZone(1800, 400, 15, 100);
-  }
-
-  /**
-   * 初始化敌人
-   * 核心函数：initEnemies
-   */
-  private initEnemies(): void {
-    const walkRect = this.groundBand.getWalkRect();
-    const spawnConfig = GameConfig.enemy.spawn;
-    const spawnPoints = spawnConfig.spawnPoints;
-    
-    // 初始化固定数量的怪物
-    let normalCount = 0;
-    let eliteCount = 0;
-    
-    // 随机打乱spawnPoints顺序
-    const shuffledPoints = [...spawnPoints].sort(() => Math.random() - 0.5);
-    
-    for (const point of shuffledPoints) {
-      // 确保位置在地图范围内
-      const clampedX = Math.max(walkRect.x, Math.min(walkRect.x + walkRect.width, point.x));
-      const clampedY = Math.max(walkRect.y, Math.min(walkRect.y + walkRect.height, point.y));
+      // 设置障碍物
+      this.obstacles = world.obstacles;
+      this.player.setObstacles(this.obstacles);
       
-      let type: 'NORMAL' | 'ELITE' | null = null;
+      // 设置撤离点
+      this.extractionZone = world.extractionZone;
       
-      // 优先生成精英怪
-      if (eliteCount < spawnConfig.initialEliteCount) {
-        type = 'ELITE';
-        eliteCount++;
-      } else if (normalCount < spawnConfig.initialNormalCount) {
-        type = 'NORMAL';
-        normalCount++;
+      // 设置灵气点
+      this.auraNodes = world.auraNodes;
+      
+      // 设置地面掉落物
+      this.groundLoots = world.lootDrops;
+      
+      // 设置敌人
+      this.enemies = world.enemies;
+      this.enemyRefreshConfig = world.enemyRefreshConfig;
+      
+      // 设置玩家可走区域和位置
+      const walkArea = world.walkArea;
+      this.player.setWalkArea(walkArea);
+      // 玩家初始位置放在地图左侧中间
+      if (walkArea.type === 'rect') {
+        this.player.x = walkArea.rect.x + 100;
+        this.player.y = walkArea.rect.y + walkArea.rect.height / 2;
+      } else {
+        // 多边形：使用边界框的中心左侧
+        const bounds = Collision.getPolygonBounds(walkArea.points);
+        this.player.x = bounds.x + 100;
+        this.player.y = bounds.y + bounds.height / 2;
       }
       
-      if (type) {
-        const enemy = new Enemy(type, clampedX, clampedY);
-        enemy.setObstacles(this.obstacles);
-        enemy.setWalkRect(walkRect);
-        this.enemies.push(enemy);
-      }
+      // 设置敌人刷新配置
+      this.lastEnemySpawnTime = Date.now();
       
-      // 如果已经生成足够的怪物，退出
-      if (normalCount >= spawnConfig.initialNormalCount && eliteCount >= spawnConfig.initialEliteCount) {
-        break;
-      }
+      console.log(`[Game] 地图加载成功: ${mapConfig.name} (${mapConfig.id})`);
+    } catch (error) {
+      console.error('[Game] 地图加载失败:', error);
+      throw error;
     }
-    
-    this.lastEnemySpawnTime = Date.now();
   }
 
   /**
@@ -261,25 +187,31 @@ export class Game {
    * 核心函数：refreshEnemies
    */
   private refreshEnemies(_deltaTime: number): void {
-    const spawnConfig = GameConfig.enemy.spawn;
+    if (!this.enemyRefreshConfig) {
+      return; // 配置未加载，不刷新
+    }
+    
+    const refreshConfig = this.enemyRefreshConfig;
     const now = Date.now();
     const timeSinceLastSpawn = (now - this.lastEnemySpawnTime) / 1000;
     
     // 检查是否到达刷新时间
-    if (timeSinceLastSpawn < spawnConfig.spawnIntervalSec) {
+    if (timeSinceLastSpawn < refreshConfig.intervalSec) {
       return;
     }
     
     // 检查是否超过上限
     const aliveCount = this.enemies.filter(e => !e.isEnemyDead()).length;
-    if (aliveCount >= spawnConfig.maxAlive) {
+    if (aliveCount >= refreshConfig.maxAlive) {
       return;
     }
     
     // 尝试生成新怪物
     const playerPos = this.player.getPosition();
-    const walkRect = this.groundBand.getWalkRect();
-    const spawnPoints = spawnConfig.spawnPoints;
+    const walkArea = this.groundBand.getWalkArea();
+    
+    // 从 GameConfig 获取刷新点（如果地图配置中没有，使用默认配置）
+    const spawnPoints = GameConfig.enemy.spawn.spawnPoints;
     
     // 随机打乱spawnPoints，找到合适的刷新点
     const shuffledPoints = [...spawnPoints].sort(() => Math.random() - 0.5);
@@ -290,18 +222,35 @@ export class Game {
       const dy = point.y - playerPos.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
       
-      if (distance < spawnConfig.minSpawnDistanceToPlayer) {
+      if (distance < refreshConfig.minDistanceToPlayer) {
         continue; // 太近了，跳过
       }
       
       // 确保位置在地图范围内
-      const clampedX = Math.max(walkRect.x, Math.min(walkRect.x + walkRect.width, point.x));
-      const clampedY = Math.max(walkRect.y, Math.min(walkRect.y + walkRect.height, point.y));
+      let clampedX = point.x;
+      let clampedY = point.y;
+      if (walkArea.type === 'rect') {
+        clampedX = Math.max(walkArea.rect.x, Math.min(walkArea.rect.x + walkArea.rect.width, point.x));
+        clampedY = Math.max(walkArea.rect.y, Math.min(walkArea.rect.y + walkArea.rect.height, point.y));
+      } else {
+        const clamped = Collision.clampPointToPolygon({ x: point.x, y: point.y }, walkArea.points);
+        clampedX = clamped.x;
+        clampedY = clamped.y;
+      }
       
-      // 生成普通怪
-      const enemy = new Enemy('NORMAL', clampedX, clampedY);
+      // 根据权重决定生成普通怪还是精英怪
+      let enemyType: 'NORMAL' | 'ELITE' = 'NORMAL';
+      if (refreshConfig.weights) {
+        const rand = Math.random();
+        const normalWeight = refreshConfig.weights.normal ?? 0.8;
+        if (rand > normalWeight) {
+          enemyType = 'ELITE';
+        }
+      }
+      
+      const enemy = new Enemy(enemyType, clampedX, clampedY);
       enemy.setObstacles(this.obstacles);
-      enemy.setWalkRect(walkRect);
+      enemy.setWalkArea(walkArea);
       this.enemies.push(enemy);
       
       this.lastEnemySpawnTime = now;
@@ -753,21 +702,26 @@ export class Game {
   /**
    * 重新开始游戏
    */
-  private restartGame(): void {
+  private async restartGame(): Promise<void> {
     // 重置玩家位置和状态
-    this.player.x = 100;
-    this.player.y = 400;
+    const walkArea = this.groundBand.getWalkArea();
+    if (walkArea.type === 'rect') {
+      this.player.x = walkArea.rect.x + 100;
+      this.player.y = walkArea.rect.y + walkArea.rect.height / 2;
+    } else {
+      // 多边形：使用边界框的中心左侧
+      const bounds = Collision.getPolygonBounds(walkArea.points);
+      this.player.x = bounds.x + 100;
+      this.player.y = bounds.y + bounds.height / 2;
+    }
     this.player.reset();
     
     // 重置倒计时和灵气
     this.sessionTimer.reset();
     this.aura = new Aura();
     
-    // 清空地面掉落物
-    this.groundLoots = [];
-    
-    // 重新初始化地面掉落物
-    this.initGroundLoots();
+    // 重新加载地图（重新生成所有内容）
+    await this.initFromMap('map_001');
     
     // 重置游戏阶段和撤离状态
     this.gamePhase = 'RUNNING';
@@ -1174,7 +1128,7 @@ export class Game {
       // RESULT 模式下渲染结算界面
       this.ui.renderResultScreen(
         this.uiState,
-        () => this.restartGame()
+        async () => { await this.restartGame(); }
       );
     } else {
       // GAME/CHANNELING 模式下渲染 HUD
