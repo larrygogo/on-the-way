@@ -4,11 +4,21 @@
   box-sizing: border-box;
 }
 
+:root {
+  /* Safe Area insets - 默认值为 0，在支持的环境中会被 env() 覆盖 */
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+}
+
 body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   background-color: #1a1a1a;
+  /* 考虑 Safe Area padding */
+  padding: var(--safe-area-inset-top) var(--safe-area-inset-right) var(--safe-area-inset-bottom) var(--safe-area-inset-left);
 }
 
 #gameCanvas {

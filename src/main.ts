@@ -1,5 +1,5 @@
 import './style.css';
-import { Game } from './game/Game';
+import { Game } from './gameplay/Game';
 
 // 获取 Canvas 元素
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;

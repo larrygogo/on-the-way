@@ -13,7 +13,14 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@engine/*": ["src/engine/*"],
+      "@content/*": ["src/content/*"],
+      "@gameplay/*": ["src/gameplay/*"],
+      "@app/*": ["src/app/*"]
+    }
   },
   "include": ["src"]
 }

@@ -11,7 +11,7 @@
 - ✅ **背包管理系统** - 安全区/普通区双区域，容量管理
 - ✅ **灵气系统** - 采集灵气点，消耗灵气转移物品到安全区
 - ✅ **撤离系统** - 自动开始撤离，区域内免伤，读条完成成功撤离
-- ✅ **干扰系统** - 常驻怪物 + 全局波次 + 撤离波次
+- ✅ **怪物系统** - 常驻怪物 + 全局波次 + 撤离波次
 - ✅ **结算系统** - 成功/失败结算，物品保留/丢失机制
 
 ### 游戏机制
@@ -36,8 +36,19 @@ on-the-way/
 ├── package.json              # 项目配置和依赖
 ├── tsconfig.json             # TypeScript 编译配置
 ├── vite.config.ts            # Vite 构建配置
+├── commitlint.config.js      # Commitlint 配置
 ├── index.html                # 入口 HTML（全屏 Canvas）
 ├── .gitignore                # Git 忽略文件
+├── data/                     # 游戏数据文件
+│   ├── dungeons/             # 秘境配置
+│   │   └── demo_dungeon.json
+│   ├── maps/                 # 地图配置
+│   │   ├── map_001.json
+│   │   ├── map_002.json
+│   │   ├── map_003.json
+│   │   ├── map_004.json
+│   │   └── map_005.json
+│   └── portal_templates.json # 传送门模板
 ├── src/
 │   ├── main.ts               # 应用入口，初始化游戏
 │   ├── style.css             # 全屏样式，DPR 自适应
@@ -57,17 +68,35 @@ on-the-way/
 │       ├── Channeling.ts     # 读条系统
 │       ├── SessionTimer.ts   # 全局倒计时
 │       ├── ExtractionZone.ts # 撤离点
-│       ├── Interference.ts   # 干扰实体（怪物）
+│       ├── Enemy.ts          # 敌人实体（怪物）
+│       ├── GameConfig.ts     # 游戏配置
+│       ├── MapConfig.ts      # 地图配置类型
+│       ├── MapLoader.ts      # 地图加载器
+│       ├── DungeonConfig.ts  # 秘境配置类型
+│       ├── PortalTemplate.ts # 传送门模板类型
+│       ├── WorldBuilder.ts   # 世界构建器
 │       ├── UI.ts             # UI 渲染系统
-│       └── Game.ts           # 主游戏循环
+│       ├── Game.ts           # 主游戏循环
+│       ├── dungeon/          # 秘境系统
+│       │   ├── DungeonLoader.ts      # 秘境加载器
+│       │   └── DungeonRunState.ts    # 秘境运行状态
+│       ├── map/              # 地图切换系统
+│       │   └── MapSwitcher.ts        # 地图切换器
+│       └── portal/           # 传送门系统
+│           ├── PortalInstance.ts            # 传送门实例
+│           ├── PortalSpawner.ts             # 传送门生成器
+│           ├── PortalChannelController.ts   # 传送门读条控制器
+│           └── PortalTemplateLoader.ts      # 传送门模板加载器
 └── docs/                     # 项目文档
     ├── 说明.md               # 文档目录
     ├── 改动记录.md           # 改动总结
-    ├── 步骤1-横向卷轴基础.md
-    ├── 步骤2-碰撞系统.md
-    ├── 步骤3-拾取与背包系统.md
-    ├── 步骤4-灵气系统.md
-    └── 步骤5-撤离与结算.md
+    ├── Conventional-Commits.md              # 提交消息规范指南
+    ├── 地图系统.md           # 地图系统文档
+    ├── 碰撞系统.md           # 碰撞系统文档
+    ├── 拾取与背包系统.md     # 拾取与背包系统文档
+    ├── 灵气系统.md           # 灵气系统文档
+    ├── 撤离与结算系统.md     # 撤离与结算系统文档
+    └── 怪物系统.md           # 怪物系统文档
 ```
 
 ## 🚀 快速开始
@@ -176,12 +205,12 @@ npm run preview
 - **扣费时机**: 读条完成时扣费（成功时）
 - **文件**: `src/game/ExtractionZone.ts`, `src/game/Game.ts`
 
-### 干扰系统
+### 怪物系统
 - **常驻怪物**: 游戏开始时生成 8-10 个怪物
 - **全局波次**: 每 2 分钟生成一波（2-4 个）
 - **撤离波次**: 撤离开始后第 3 秒和第 9 秒各生成一波（3-5 个）
 - **伤害**: 接触怪物扣 10 HP
-- **文件**: `src/game/Interference.ts`
+- **文件**: `src/game/Enemy.ts`
 
 ### UI 系统
 - **HUD**: 显示背包占用、灵气、倒计时、HP
@@ -191,6 +220,23 @@ npm run preview
 - **结算界面**: 显示成功/失败原因、带回物品、丢失物品
 - **文件**: `src/game/UI.ts`
 
+### 地图系统
+- **地图配置**: 从 JSON 文件加载地图配置
+- **地图切换**: 支持多地图切换和状态保存
+- **世界构建**: 从配置生成游戏世界（障碍物、灵气点、撤离点等）
+- **文件**: `src/game/MapConfig.ts`, `src/game/MapLoader.ts`, `src/game/WorldBuilder.ts`, `src/game/map/MapSwitcher.ts`
+
+### 秘境系统
+- **秘境配置**: 从 JSON 文件加载秘境配置
+- **秘境运行**: 管理秘境运行状态和流程
+- **文件**: `src/game/DungeonConfig.ts`, `src/game/dungeon/DungeonLoader.ts`, `src/game/dungeon/DungeonRunState.ts`
+
+### 传送门系统
+- **传送门模板**: 从 JSON 文件加载传送门模板
+- **传送门实例**: 管理传送门的生成和交互
+- **读条控制**: 传送门交互的读条机制
+- **文件**: `src/game/PortalTemplate.ts`, `src/game/portal/PortalInstance.ts`, `src/game/portal/PortalSpawner.ts`, `src/game/portal/PortalChannelController.ts`, `src/game/portal/PortalTemplateLoader.ts`
+
 ## 📚 文档
 
 详细开发文档位于 `docs/` 目录：
@@ -198,11 +244,12 @@ npm run preview
 - **[说明.md](docs/说明.md)** - 文档目录索引
 - **[改动记录.md](docs/改动记录.md)** - 项目改动总结
 - **[Conventional-Commits.md](docs/Conventional-Commits.md)** - 提交消息规范指南
-- **[步骤1-横向卷轴基础.md](docs/步骤1-横向卷轴基础.md)** - 基础系统实现
-- **[步骤2-碰撞系统.md](docs/步骤2-碰撞系统.md)** - 障碍物与碰撞系统
-- **[步骤3-拾取与背包系统.md](docs/步骤3-拾取与背包系统.md)** - 物品拾取与背包管理
-- **[步骤4-灵气系统.md](docs/步骤4-灵气系统.md)** - 灵气系统与物品转移
-- **[步骤5-撤离与结算.md](docs/步骤5-撤离与结算.md)** - 撤离点与结算系统
+- **[地图系统.md](docs/地图系统.md)** - 地图系统：坐标系统、相机跟随、地面渲染和深度排序
+- **[碰撞系统.md](docs/碰撞系统.md)** - 碰撞系统：障碍物、碰撞检测和滑墙效果
+- **[拾取与背包系统.md](docs/拾取与背包系统.md)** - 拾取与背包系统：物品拾取、背包管理和容量系统
+- **[灵气系统.md](docs/灵气系统.md)** - 灵气系统：灵气采集、消耗和读条机制
+- **[撤离与结算系统.md](docs/撤离与结算系统.md)** - 撤离与结算系统：倒计时、撤离点、HP管理和游戏结算
+- **[怪物系统.md](docs/怪物系统.md)** - 怪物系统：敌人类型、AI行为、战斗和刷新机制
 
 ## 🔧 技术细节
 
