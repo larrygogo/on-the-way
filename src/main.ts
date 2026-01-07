@@ -29,6 +29,7 @@ let mainMenuPanel: MainMenuPanel | null = null;
 
 // 主界面状态
 let currentMenuPage: 'HOME' | 'START' | 'CULTIVATION' | 'STASH' | 'SETTINGS' | 'RESULT_SUMMARY' = 'HOME';
+let previousMenuPage: 'HOME' | 'START' | 'CULTIVATION' | 'STASH' | 'SETTINGS' | 'RESULT_SUMMARY' | null = null;
 let selectedDungeonIndex: number = -1;
 let availableDungeons: Array<{ id: string; config: DungeonConfig }> = [];
 let cultivationTempAttrs = { ...playerProfile.attrs };
@@ -119,6 +120,7 @@ function handleMainMenuButton(buttonId: string): void {
     if (buttonId === 'enter' && selectedDungeonIndex >= 0) {
       startGame(availableDungeons[selectedDungeonIndex].id);
     } else if (buttonId === 'back') {
+      previousMenuPage = currentMenuPage;
       currentMenuPage = 'HOME';
       appState.setMenuPage('HOME');
       if (mainMenuPanel) {
@@ -131,6 +133,7 @@ function handleMainMenuButton(buttonId: string): void {
       playerProfile.attrs = { ...cultivationTempAttrs };
       playerProfile.unspentPoints = cultivationTempUnspentPoints;
       ProfileStore.saveProfile(playerProfile);
+      previousMenuPage = currentMenuPage;
       currentMenuPage = 'HOME';
       appState.setMenuPage('HOME');
       if (mainMenuPanel) {
@@ -142,6 +145,7 @@ function handleMainMenuButton(buttonId: string): void {
       cultivationTempAttrs = { ...playerProfile.attrs };
       cultivationTempUnspentPoints = playerProfile.unspentPoints;
     } else if (buttonId === 'back') {
+      previousMenuPage = currentMenuPage;
       currentMenuPage = 'HOME';
       appState.setMenuPage('HOME');
       if (mainMenuPanel) {
@@ -169,12 +173,14 @@ function handleMainMenuButton(buttonId: string): void {
       playerProfile.stashItems = [...stashTempItems];
       playerProfile.loadoutSafeItems = [...stashTempLoadoutItems];
       ProfileStore.saveProfile(playerProfile);
+      previousMenuPage = currentMenuPage;
       currentMenuPage = 'HOME';
       appState.setMenuPage('HOME');
       if (mainMenuPanel) {
         mainMenuPanel.setHomePageVisible(true);
       }
     } else if (buttonId === 'back') {
+      previousMenuPage = currentMenuPage;
       currentMenuPage = 'HOME';
       appState.setMenuPage('HOME');
       if (mainMenuPanel) {
@@ -183,6 +189,7 @@ function handleMainMenuButton(buttonId: string): void {
     }
   } else if (currentMenuPage === 'SETTINGS') {
     if (buttonId === 'back') {
+      previousMenuPage = currentMenuPage;
       currentMenuPage = 'HOME';
       appState.setMenuPage('HOME');
       if (mainMenuPanel) {
@@ -286,6 +293,17 @@ async function startGame(dungeonId: string): Promise<void> {
 // 渲染主界面
 function renderMainMenu(): void {
   try {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // 如果从其他页面切换到HOME，清空canvas清除旧UI残留
+    if (currentMenuPage === 'HOME' && previousMenuPage !== 'HOME' && previousMenuPage !== null) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // 填充背景色（与新UI系统保持一致）
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    
     if (currentMenuPage === 'HOME') {
       // HOME 页面由新 UI 系统渲染，这里不需要渲染
       // 但需要更新角色信息
@@ -341,27 +359,98 @@ function gameLoop(): void {
   if (screen === 'MAIN_MENU' || screen === 'RESULT') {
     // 如果 appState 中的 menuPage 与 currentMenuPage 不一致，同步它
     if (menuPage !== currentMenuPage) {
+      previousMenuPage = currentMenuPage;
       currentMenuPage = menuPage;
     }
-    renderMainMenu();
+    
+    // 获取canvas上下文
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      // 先清空canvas（避免残留）
+      if (currentMenuPage !== 'HOME') {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      
+      // 渲染主菜单（旧UI系统，用于非HOME页面）
+      renderMainMenu();
+      
+      // 渲染 UI 管理器（新UI系统，用于HOME页面）
+      // 注意：只有在HOME页面时才渲染新UI系统，避免覆盖旧UI
+      if (currentMenuPage === 'HOME') {
+        uiManager.render(ctx);
+      }
+    }
+    
+    // 更新previousMenuPage（在渲染后，这样下次切换时能正确检测）
+    if (previousMenuPage !== currentMenuPage) {
+      previousMenuPage = currentMenuPage;
+    }
   } else if (screen === 'RUN' && game) {
     // 游戏循环由 Game 类内部处理
     // 这里不需要额外渲染
-  }
-  
-  // 渲染 UI 管理器（在游戏画面之后）
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    uiManager.render(ctx);
+  } else {
+    // 其他状态也渲染UI管理器
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      uiManager.render(ctx);
+    }
   }
   
   requestAnimationFrame(gameLoop);
+}
+
+/**
+ * 检测是否为移动设备
+ */
+function isMobile(): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+         (window.innerWidth <= 768);
+}
+
+/**
+ * 检测设备类型并输出信息
+ */
+function detectDevice(): void {
+  const isMobileDevice = isMobile();
+  const userAgent = navigator.userAgent;
+  const screenWidth = window.innerWidth;
+  const screenHeight = window.innerHeight;
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  
+  console.log('[Main] ========== 设备检测 ==========');
+  console.log('[Main] 设备类型:', isMobileDevice ? '📱 移动设备' : '💻 桌面设备');
+  console.log('[Main] 屏幕尺寸:', `${screenWidth} x ${screenHeight}`);
+  console.log('[Main] 设备像素比:', devicePixelRatio);
+  console.log('[Main] User Agent:', userAgent);
+  
+  // 检测具体设备类型
+  if (/iPhone/i.test(userAgent)) {
+    console.log('[Main] 具体设备: iPhone');
+  } else if (/iPad/i.test(userAgent)) {
+    console.log('[Main] 具体设备: iPad');
+  } else if (/Android/i.test(userAgent)) {
+    console.log('[Main] 具体设备: Android');
+  } else if (/Windows/i.test(userAgent)) {
+    console.log('[Main] 具体设备: Windows');
+  } else if (/Mac/i.test(userAgent)) {
+    console.log('[Main] 具体设备: Mac');
+  } else if (/Linux/i.test(userAgent)) {
+    console.log('[Main] 具体设备: Linux');
+  }
+  
+  // 检测屏幕方向
+  const isPortrait = screenHeight > screenWidth;
+  console.log('[Main] 屏幕方向:', isPortrait ? '竖屏 (Portrait)' : '横屏 (Landscape)');
+  console.log('[Main] ==============================');
 }
 
 // 初始化
 (async () => {
   try {
     console.log('[Main] 开始初始化...');
+    
+    // 检测设备类型
+    detectDevice();
     
     // 初始化 UI 管理器
     uiManager = new UIManager({ designW: 1280, designH: 720 });

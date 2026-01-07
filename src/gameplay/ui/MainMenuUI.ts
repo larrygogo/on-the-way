@@ -562,31 +562,48 @@ export class MainMenuUI {
     this.ctx.restore();
 
     // 绘制仓库物品
-    for (let i = stashStartIndex; i < stashEndIndex; i++) {
-      const item = tempStashItems[i];
-      const itemY = stashStartY + (i - stashStartIndex) * this.itemHeight - (stashScrollY % 1) * this.itemHeight;
-      
-      if (itemY < stashStartY - this.itemHeight || itemY > stashStartY + stashHeight) {
-        continue;
-      }
-
-      // 物品背景
+    if (tempStashItems.length === 0) {
+      // 如果仓库为空，显示提示信息
       this.ctx.save();
-      this.ctx.fillStyle = '#3a3a3a';
-      this.ctx.fillRect(stashStartX + 5, itemY, stashWidth - 10, this.itemHeight - 5);
-      this.ctx.restore();
-
-      // 物品信息
-      this.ctx.save();
-      this.ctx.fillStyle = '#ffffff';
-      this.ctx.font = '14px Arial';
-      this.ctx.textAlign = 'left';
+      this.ctx.fillStyle = '#999999';
+      this.ctx.font = '16px Arial';
+      this.ctx.textAlign = 'center';
       this.ctx.fillText(
-        `${item.name} (占格${item.size})`,
-        stashStartX + 15,
-        itemY + this.itemHeight / 2
+        '仓库为空',
+        stashStartX + stashWidth / 2,
+        stashStartY + stashHeight / 2
       );
       this.ctx.restore();
+    } else {
+      for (let i = stashStartIndex; i < stashEndIndex; i++) {
+        const item = tempStashItems[i];
+        if (!item) continue;
+        
+        const itemY = stashStartY + (i - stashStartIndex) * this.itemHeight - (stashScrollY % 1) * this.itemHeight;
+        
+        if (itemY < stashStartY - this.itemHeight || itemY > stashStartY + stashHeight) {
+          continue;
+        }
+
+        // 物品背景
+        this.ctx.save();
+        this.ctx.fillStyle = '#3a3a3a';
+        this.ctx.fillRect(stashStartX + 5, itemY, stashWidth - 10, this.itemHeight - 5);
+        this.ctx.restore();
+
+        // 物品信息
+        this.ctx.save();
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '14px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(
+          `${item.name} (占格${item.size})`,
+          stashStartX + 15,
+          itemY + this.itemHeight / 2
+        );
+        this.ctx.restore();
+      }
     }
 
     // 绘制出战安全区（右侧）

@@ -1,6 +1,6 @@
 # 入途 (On The Way) - 2.5D 横向卷轴生存游戏
 
-一个使用 TypeScript + Canvas 开发的 2.5D 横向卷轴生存游戏 MVP。玩家需要在限时内收集物品、管理背包、采集灵气，并成功撤离。
+一个使用 TypeScript + Canvas 开发的 2.5D 横向卷轴生存游戏。采用分层架构设计，从 MVP 系统重构为可持续、可扩展的生产级架构。玩家需要在限时内收集物品、管理背包、采集灵气，并成功撤离。
 
 ## 🎮 游戏特性
 
@@ -29,6 +29,15 @@
 - **原生 JavaScript** - 无框架依赖
 - **Conventional Commits** - 提交消息规范（Commitlint + Husky）
 
+## 🏗️ 架构特点
+
+- **分层架构** - 清晰的分层设计：核心系统层、引擎层、内容层、游戏逻辑层、UI 层、应用层
+- **事件驱动** - 使用 EventBus 实现系统间解耦通信
+- **服务定位** - 通过 ServiceLocator 提供全局服务访问，支持依赖注入
+- **资源管理** - 统一的资源管理系统，支持缓存和预加载
+- **性能优化** - 视锥剔除、空间哈希、对象池等优化技术
+- **可扩展性** - 易于添加新功能和新系统
+
 ## 📁 项目结构
 
 ```
@@ -50,45 +59,40 @@ on-the-way/
 │   │   └── map_005.json
 │   └── portal_templates.json # 传送门模板
 ├── src/
-│   ├── main.ts               # 应用入口，初始化游戏
+│   ├── main.ts               # 应用入口
 │   ├── style.css             # 全屏样式，DPR 自适应
-│   └── game/
-│       ├── Renderable.ts     # 可渲染接口
-│       ├── Camera.ts         # 相机系统（横向卷轴跟随）
-│       ├── Player.ts         # 玩家实体（位置、移动、HP、碰撞）
-│       ├── GroundBand.ts     # 地面带（可走区域）
-│       ├── Renderer.ts       # 渲染器（Canvas 上下文管理，按 y 排序）
-│       ├── Obstacle.ts       # 障碍物实体
-│       ├── Collision.ts      # 碰撞检测工具
-│       ├── Item.ts           # 物品类型定义
-│       ├── GroundLoot.ts    # 地面掉落物
-│       ├── Bag.ts            # 背包系统（安全区/普通区）
-│       ├── Aura.ts           # 灵气系统
-│       ├── AuraNode.ts       # 灵气点实体
-│       ├── Channeling.ts     # 读条系统
-│       ├── SessionTimer.ts   # 全局倒计时
-│       ├── ExtractionZone.ts # 撤离点
-│       ├── Enemy.ts          # 敌人实体（怪物）
-│       ├── GameConfig.ts     # 游戏配置
-│       ├── MapConfig.ts      # 地图配置类型
-│       ├── MapLoader.ts      # 地图加载器
-│       ├── DungeonConfig.ts  # 秘境配置类型
-│       ├── PortalTemplate.ts # 传送门模板类型
-│       ├── WorldBuilder.ts   # 世界构建器
-│       ├── UI.ts             # UI 渲染系统
-│       ├── Game.ts           # 主游戏循环
-│       ├── dungeon/          # 秘境系统
-│       │   ├── DungeonLoader.ts      # 秘境加载器
-│       │   └── DungeonRunState.ts    # 秘境运行状态
-│       ├── map/              # 地图切换系统
-│       │   └── MapSwitcher.ts        # 地图切换器
-│       └── portal/           # 传送门系统
-│           ├── PortalInstance.ts            # 传送门实例
-│           ├── PortalSpawner.ts             # 传送门生成器
-│           ├── PortalChannelController.ts   # 传送门读条控制器
-│           └── PortalTemplateLoader.ts      # 传送门模板加载器
+│   ├── core/                 # 核心系统层
+│   │   ├── events/           # 事件系统
+│   │   ├── resources/        # 资源管理
+│   │   ├── config/           # 配置管理
+│   │   ├── services/         # 服务定位器
+│   │   └── utils/            # 工具函数
+│   ├── engine/               # 引擎层
+│   │   ├── render/           # 渲染系统
+│   │   ├── physics/          # 物理系统
+│   │   └── input/            # 输入系统
+│   ├── content/              # 内容层
+│   │   ├── config/           # 配置类型定义
+│   │   ├── loaders/          # 资源加载器
+│   │   ├── builders/         # 世界构建器
+│   │   └── runtime/          # 运行时内容管理
+│   ├── gameplay/             # 游戏逻辑层
+│   │   ├── entities/         # 游戏实体
+│   │   ├── systems/          # 游戏系统
+│   │   ├── state/            # 状态管理
+│   │   ├── managers/         # 游戏管理器
+│   │   └── ui/               # 游戏内 UI
+│   ├── ui/                   # UI 层
+│   │   ├── core/            # UI 核心系统
+│   │   ├── components/      # UI 组件
+│   │   ├── panels/          # UI 面板
+│   │   └── integration/     # UI 集成
+│   └── app/                  # 应用层
+│       ├── bootstrap/        # 应用启动
+│       └── scenes/           # 场景管理
 └── docs/                     # 项目文档
     ├── 说明.md               # 文档目录
+    ├── 架构文档.md           # 架构文档
     ├── 改动记录.md           # 改动总结
     ├── Conventional-Commits.md              # 提交消息规范指南
     ├── 地图系统.md           # 地图系统文档

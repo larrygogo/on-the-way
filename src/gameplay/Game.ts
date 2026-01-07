@@ -1290,6 +1290,9 @@ export class Game {
   private handleOpenBag(): void {
     // 如果使用新 UI 系统，打开 InventoryPanel
     if (this.uiManager && this.inventoryPanel) {
+      // 更新布局（响应式）
+      const layoutState = this.uiManager.getLayoutState();
+      this.inventoryPanel.updateLayout(layoutState);
       this.inventoryPanel.setData(this.bag, this.aura);
       this.uiManager.open(this.inventoryPanel, { layer: 'modal' });
     }
