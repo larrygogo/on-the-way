@@ -7,6 +7,10 @@ import { MainMenuUI, ButtonClickResult } from './gameplay/ui/MainMenuUI';
 import { DungeonLoader } from './content/loaders/DungeonLoader';
 import { DungeonConfig } from './content/config/DungeonConfig';
 import { ItemInstance } from './gameplay/entities/Item';
+import { UIManager } from './ui/core/UIManager';
+import { bindCanvasEvents } from './ui/integration/bindCanvasEvents';
+import { bindResize } from './ui/integration/bindResize';
+import { MainMenuPanel } from './ui/panels/MainMenuPanel';
 
 // 获取 Canvas 元素
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -20,6 +24,8 @@ const appState = new AppState();
 let playerProfile: PlayerProfile = ProfileStore.loadProfile();
 let game: Game | null = null;
 let mainMenuUI: MainMenuUI;
+let uiManager: UIManager;
+let mainMenuPanel: MainMenuPanel | null = null;
 
 // 主界面状态
 let currentMenuPage: 'HOME' | 'START' | 'CULTIVATION' | 'STASH' | 'SETTINGS' | 'RESULT_SUMMARY' = 'HOME';
@@ -59,12 +65,18 @@ async function loadAvailableDungeons(): Promise<void> {
   }
 }
 
-// 处理主界面点击
+// 处理主界面点击（仅用于非 HOME 页面，HOME 页面使用新 UI 系统）
 function handleMainMenuClick(e: MouseEvent | TouchEvent): void {
   if (appState.getScreen() !== 'MAIN_MENU' && appState.getScreen() !== 'RESULT') {
     return;
   }
 
+  // 如果当前是 HOME 页面且使用新 UI，不处理（新 UI 系统会处理）
+  if (currentMenuPage === 'HOME' && mainMenuPanel && mainMenuPanel.isOpen) {
+    return;
+  }
+
+  // 只在主菜单模式下处理，避免与游戏内 UI 冲突
   e.preventDefault();
   e.stopPropagation();
 
@@ -79,9 +91,7 @@ function handleMainMenuClick(e: MouseEvent | TouchEvent): void {
 
   let result: ButtonClickResult | null = null;
 
-  if (currentMenuPage === 'HOME') {
-    result = mainMenuUI.checkHomePageClick(x, y);
-  } else if (currentMenuPage === 'START') {
+  if (currentMenuPage === 'START') {
     result = mainMenuUI.checkStartPageClick(x, y, availableDungeons);
   } else if (currentMenuPage === 'CULTIVATION') {
     result = mainMenuUI.checkCultivationPageClick(x, y, playerProfile);
@@ -103,27 +113,17 @@ function handleMainMenuClick(e: MouseEvent | TouchEvent): void {
 // 处理主界面按钮点击
 function handleMainMenuButton(buttonId: string): void {
   if (currentMenuPage === 'HOME') {
-    if (buttonId === 'start') {
-      currentMenuPage = 'START';
-    } else if (buttonId === 'cultivation') {
-      currentMenuPage = 'CULTIVATION';
-      // 重置临时属性
-      cultivationTempAttrs = { ...playerProfile.attrs };
-      cultivationTempUnspentPoints = playerProfile.unspentPoints;
-    } else if (buttonId === 'stash') {
-      currentMenuPage = 'STASH';
-      // 重置临时物品
-      stashTempItems = [...playerProfile.stashItems];
-      stashTempLoadoutItems = [...playerProfile.loadoutSafeItems];
-      mainMenuUI.resetScroll();
-    } else if (buttonId === 'settings') {
-      currentMenuPage = 'SETTINGS';
-    }
+    // HOME 页面的按钮点击由新 UI 系统处理，这里不应该被调用
+    console.warn('[Main] HOME 页面按钮点击应该由新 UI 系统处理');
   } else if (currentMenuPage === 'START') {
     if (buttonId === 'enter' && selectedDungeonIndex >= 0) {
       startGame(availableDungeons[selectedDungeonIndex].id);
     } else if (buttonId === 'back') {
       currentMenuPage = 'HOME';
+      appState.setMenuPage('HOME');
+      if (mainMenuPanel) {
+        mainMenuPanel.setHomePageVisible(true);
+      }
     }
   } else if (currentMenuPage === 'CULTIVATION') {
     if (buttonId === 'save') {
@@ -132,12 +132,21 @@ function handleMainMenuButton(buttonId: string): void {
       playerProfile.unspentPoints = cultivationTempUnspentPoints;
       ProfileStore.saveProfile(playerProfile);
       currentMenuPage = 'HOME';
+      appState.setMenuPage('HOME');
+      if (mainMenuPanel) {
+        mainMenuPanel.setHomePageVisible(true);
+        mainMenuPanel.updateProfile(playerProfile);
+      }
     } else if (buttonId === 'reset') {
       // 重置临时属性
       cultivationTempAttrs = { ...playerProfile.attrs };
       cultivationTempUnspentPoints = playerProfile.unspentPoints;
     } else if (buttonId === 'back') {
       currentMenuPage = 'HOME';
+      appState.setMenuPage('HOME');
+      if (mainMenuPanel) {
+        mainMenuPanel.setHomePageVisible(true);
+      }
     } else if (buttonId.startsWith('increase_')) {
       const attrIndex = parseInt(buttonId.split('_')[1]);
       const attrKeys: Array<'atk' | 'hp' | 'move'> = ['atk', 'hp', 'move'];
@@ -161,12 +170,24 @@ function handleMainMenuButton(buttonId: string): void {
       playerProfile.loadoutSafeItems = [...stashTempLoadoutItems];
       ProfileStore.saveProfile(playerProfile);
       currentMenuPage = 'HOME';
+      appState.setMenuPage('HOME');
+      if (mainMenuPanel) {
+        mainMenuPanel.setHomePageVisible(true);
+      }
     } else if (buttonId === 'back') {
       currentMenuPage = 'HOME';
+      appState.setMenuPage('HOME');
+      if (mainMenuPanel) {
+        mainMenuPanel.setHomePageVisible(true);
+      }
     }
   } else if (currentMenuPage === 'SETTINGS') {
     if (buttonId === 'back') {
       currentMenuPage = 'HOME';
+      appState.setMenuPage('HOME');
+      if (mainMenuPanel) {
+        mainMenuPanel.setHomePageVisible(true);
+      }
     } else if (buttonId.startsWith('volume_')) {
       settingsVolume = parseFloat(buttonId.split('_')[1]);
     } else if (buttonId === 'toggle_debug') {
@@ -245,8 +266,8 @@ async function startGame(dungeonId: string): Promise<void> {
     // 重新加载 profile（确保最新）
     playerProfile = ProfileStore.loadProfile();
     
-    // 创建游戏实例
-    game = new Game(canvas, appState, playerProfile);
+    // 创建游戏实例（传入 UIManager 以启用新 UI 系统）
+    game = new Game(canvas, appState, playerProfile, uiManager);
     
     // 进入秘境
     await game.enterDungeon(dungeonId);
@@ -266,7 +287,11 @@ async function startGame(dungeonId: string): Promise<void> {
 function renderMainMenu(): void {
   try {
     if (currentMenuPage === 'HOME') {
-      mainMenuUI.renderHomePage(playerProfile);
+      // HOME 页面由新 UI 系统渲染，这里不需要渲染
+      // 但需要更新角色信息
+      if (mainMenuPanel) {
+        mainMenuPanel.updateProfile(playerProfile);
+      }
     } else if (currentMenuPage === 'START') {
       mainMenuUI.renderStartPage(availableDungeons, selectedDungeonIndex);
     } else if (currentMenuPage === 'CULTIVATION') {
@@ -300,9 +325,17 @@ function renderMainMenu(): void {
 }
 
 // 主循环
+let lastTime = performance.now();
 function gameLoop(): void {
+  const currentTime = performance.now();
+  const dt = (currentTime - lastTime) / 1000; // 转换为秒
+  lastTime = currentTime;
+
   const screen = appState.getScreen();
   const menuPage = appState.getMenuPage();
+  
+  // 更新 UI 管理器
+  uiManager.update(dt);
   
   // 同步菜单页面状态（如果 appState 中的状态更新了）
   if (screen === 'MAIN_MENU' || screen === 'RESULT') {
@@ -316,6 +349,12 @@ function gameLoop(): void {
     // 这里不需要额外渲染
   }
   
+  // 渲染 UI 管理器（在游戏画面之后）
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    uiManager.render(ctx);
+  }
+  
   requestAnimationFrame(gameLoop);
 }
 
@@ -324,7 +363,10 @@ function gameLoop(): void {
   try {
     console.log('[Main] 开始初始化...');
     
-    // 设置 Canvas 尺寸
+    // 初始化 UI 管理器
+    uiManager = new UIManager({ designW: 1280, designH: 720 });
+    
+    // 设置 Canvas 尺寸并绑定 Resize
     const resizeCanvas = () => {
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
@@ -336,7 +378,90 @@ function gameLoop(): void {
       }
     };
     resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
+    
+    // 绑定 UI 系统的 Resize 和事件
+    bindResize(canvas, uiManager);
+    bindCanvasEvents(canvas, uiManager);
+    
+    // 创建主菜单面板（在 bindResize 之后，确保布局已初始化）
+    const layoutState = uiManager.getLayoutState();
+    console.log('[Main] 布局状态:', {
+      designW: layoutState.designW,
+      designH: layoutState.designH,
+      screenW: layoutState.screenW,
+      screenH: layoutState.screenH,
+      scale: layoutState.scale,
+      viewportRect: layoutState.viewportRect,
+      safeRect: layoutState.safeRect,
+    });
+    console.log('[Main] safeRect 详细信息:', JSON.stringify(layoutState.safeRect, null, 2));
+    mainMenuPanel = new MainMenuPanel(layoutState, playerProfile);
+    
+    // 监听布局变化，更新主菜单面板布局
+    // 注意：bindResize 已经监听了 resize，我们需要在它之后更新面板
+    const updateMainMenuLayout = () => {
+      if (mainMenuPanel) {
+        const newLayoutState = uiManager.getLayoutState();
+        mainMenuPanel.updateLayout(newLayoutState);
+      }
+    };
+    
+    // 在现有的 resize 监听之后添加我们的更新
+    window.addEventListener('resize', updateMainMenuLayout);
+    mainMenuPanel.setOnStartClick(() => {
+      currentMenuPage = 'START';
+      appState.setMenuPage('START');
+      mainMenuPanel?.setHomePageVisible(false);
+    });
+    mainMenuPanel.setOnCultivationClick(() => {
+      currentMenuPage = 'CULTIVATION';
+      appState.setMenuPage('CULTIVATION');
+      cultivationTempAttrs = { ...playerProfile.attrs };
+      cultivationTempUnspentPoints = playerProfile.unspentPoints;
+      mainMenuPanel?.setHomePageVisible(false);
+    });
+    mainMenuPanel.setOnStashClick(() => {
+      currentMenuPage = 'STASH';
+      appState.setMenuPage('STASH');
+      stashTempItems = [...playerProfile.stashItems];
+      stashTempLoadoutItems = [...playerProfile.loadoutSafeItems];
+      mainMenuUI.resetScroll();
+      mainMenuPanel?.setHomePageVisible(false);
+    });
+    mainMenuPanel.setOnSettingsClick(() => {
+      currentMenuPage = 'SETTINGS';
+      appState.setMenuPage('SETTINGS');
+      mainMenuPanel?.setHomePageVisible(false);
+    });
+    
+    // 打开主菜单面板
+    uiManager.open(mainMenuPanel, { layer: 'ui' });
+    console.log('[Main] 主菜单面板已打开，面板栈长度:', uiManager['panelStack'].length);
+    console.log('[Main] 主菜单面板状态:', {
+      isOpen: mainMenuPanel.isOpen,
+      visible: mainMenuPanel.visible,
+      interactive: mainMenuPanel.interactive,
+      children: mainMenuPanel['children'].length,
+    });
+    console.log('[Main] UI 层级状态:', {
+      uiLayer: {
+        enabled: uiManager['layers'].ui.enabled,
+        visible: uiManager['layers'].ui.visible,
+        children: uiManager['layers'].ui['children'].length,
+      },
+    });
+    console.log('[Main] 主菜单面板按钮位置:', {
+      start: { x: mainMenuPanel['startButton'].x, y: mainMenuPanel['startButton'].y, visible: mainMenuPanel['startButton'].visible, interactive: mainMenuPanel['startButton'].interactive },
+      cultivation: { x: mainMenuPanel['cultivationButton'].x, y: mainMenuPanel['cultivationButton'].y, visible: mainMenuPanel['cultivationButton'].visible, interactive: mainMenuPanel['cultivationButton'].interactive },
+      stash: { x: mainMenuPanel['stashButton'].x, y: mainMenuPanel['stashButton'].y, visible: mainMenuPanel['stashButton'].visible, interactive: mainMenuPanel['stashButton'].interactive },
+      settings: { x: mainMenuPanel['settingsButton'].x, y: mainMenuPanel['settingsButton'].y, visible: mainMenuPanel['settingsButton'].visible, interactive: mainMenuPanel['settingsButton'].interactive },
+    });
+    
+    // 保留原有的事件监听（用于非 HOME 页面，后续逐步迁移）
+    canvas.addEventListener('click', handleMainMenuClick);
+    canvas.addEventListener('touchstart', handleMainMenuClick);
+    window.addEventListener('keydown', handleKeyDown);
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
     
     // 设置初始状态
     appState.setScreen('MAIN_MENU');
@@ -346,12 +471,6 @@ function gameLoop(): void {
     // 加载秘境列表
     await loadAvailableDungeons();
     console.log('[Main] 秘境列表加载完成，数量:', availableDungeons.length);
-    
-    // 设置事件监听
-    canvas.addEventListener('click', handleMainMenuClick);
-    canvas.addEventListener('touchstart', handleMainMenuClick);
-    window.addEventListener('keydown', handleKeyDown);
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
     
     console.log('[Main] 启动主循环...');
     // 启动主循环

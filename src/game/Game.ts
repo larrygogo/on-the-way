@@ -1,36 +1,23 @@
-import { Camera } from '../engine/render/Camera';
-import { Player } from '../gameplay/entities/Player';
-import { GroundBand } from '../engine/render/GroundBand';
-import { Renderer } from '../engine/render/Renderer';
-import { Obstacle } from '../gameplay/entities/Obstacle';
-import { Renderable } from '../engine/render/Renderable';
-import { GroundLoot } from '../gameplay/entities/GroundLoot';
-import { ItemInstance } from '../gameplay/entities/Item';
-import { Bag } from '../gameplay/systems/Bag';
-import { UI, UIState } from '../gameplay/ui/UI';
-import { Aura } from '../gameplay/systems/Aura';
-import { AuraNode } from '../gameplay/entities/AuraNode';
-import { Channeling, ChannelType } from '../gameplay/systems/Channeling';
-import { SessionTimer } from '../gameplay/systems/SessionTimer';
-import { ExtractionZone } from '../gameplay/entities/ExtractionZone';
-import { Enemy } from '../gameplay/entities/Enemy';
-import { GameConfig } from '../content/config/GameConfig';
-import { MapLoader } from '../content/loaders/MapLoader';
-import { WorldBuilder } from '../content/builders/WorldBuilder';
-import { Collision } from '../engine/physics/Collision';
-import { DungeonLoader } from '../content/loaders/DungeonLoader';
-import { DungeonRunState } from '../gameplay/state/DungeonRunState';
-import { PortalInstance } from '../gameplay/entities/PortalInstance';
-import { PortalSpawner } from '../content/builders/PortalSpawner';
-import { PortalChannelController } from '../gameplay/systems/PortalChannelController';
-import { PortalTemplateLoader } from '../content/loaders/PortalTemplateLoader';
-import { MapSwitcher } from '../content/runtime/MapSwitcher';
-import { MobileControls } from '../gameplay/ui/MobileControls';
-import { AppState } from './state/AppState';
-import { PlayerProfile } from './state/PlayerProfile';
-import { ProfileStore } from './state/ProfileStore';
-import { UIManager } from '../ui/core/UIManager';
-import { InventoryPanel } from '../ui/panels/InventoryPanel';
+import { Camera } from './Camera';
+import { Player } from './Player';
+import { GroundBand } from './GroundBand';
+import { Renderer } from './Renderer';
+import { Obstacle } from './Obstacle';
+import { Renderable } from './Renderable';
+import { GroundLoot } from './GroundLoot';
+import { ItemInstance } from './Item';
+import { Bag } from './Bag';
+import { UI, UIState } from './UI';
+import { Aura } from './Aura';
+import { AuraNode } from './AuraNode';
+import { Channeling, ChannelType } from './Channeling';
+import { SessionTimer } from './SessionTimer';
+import { ExtractionZone } from './ExtractionZone';
+import { Enemy } from './Enemy';
+import { GameConfig } from './GameConfig';
+import { MapLoader } from './MapLoader';
+import { WorldBuilder } from './WorldBuilder';
+import { Collision } from './Collision';
 
 /**
  * 主游戏循环
@@ -51,8 +38,6 @@ export class Game {
   private sessionTimer: SessionTimer;
   private ui: UI;
   private gamePhase: 'RUNNING' | 'RESULT' = 'RUNNING';
-  private appState: AppState;
-  private playerProfile: PlayerProfile;
   private extractState: 'IDLE' | 'EXTRACTING' | 'SUCCESS' = 'IDLE';
   private extractProgress: number = 0; // 撤离进度（秒）
   private lastEnemySpawnTime: number = 0; // 上次刷新敌人的时间
@@ -83,59 +68,20 @@ export class Game {
   private nearestAuraNode: AuraNode | null = null;
   private animationFrameId: number = 0;
   private lastTime: number = 0;
-  
-  // 秘境系统
-  private dungeonRunState: DungeonRunState | null = null;
-  private portalInstances: PortalInstance[] = [];
-  private portalChannelController: PortalChannelController;
-  private nearestPortal: PortalInstance | null = null;
 
-  // 移动端控制
-  private mobileControls: MobileControls | null = null;
-  private portraitOverlayDismissed: boolean = false; // 竖屏提示遮罩是否已关闭
-
-  // 新 UI 系统
-  private uiManager: UIManager | null = null;
-  private inventoryPanel: InventoryPanel | null = null;
-
-  constructor(canvas: HTMLCanvasElement, appState: AppState, playerProfile: PlayerProfile, uiManager?: UIManager) {
-    this.appState = appState;
-    this.playerProfile = playerProfile;
+  constructor(canvas: HTMLCanvasElement) {
     // 初始化渲染器
     this.renderer = new Renderer(canvas);
 
-    // 保存 UIManager（如果提供）
-    this.uiManager = uiManager || null;
-
-    // 初始化 UI（传入 UIManager 以启用新系统）
-    this.ui = new UI(canvas, uiManager);
-
-    // 如果使用新 UI 系统，创建 InventoryPanel
-    if (this.uiManager) {
-      this.inventoryPanel = new InventoryPanel();
-      this.inventoryPanel.setOnClose(() => {
-        this.uiState.showBagDialog = false;
-        this.uiState.uiMode = 'GAME';
-      });
-      this.inventoryPanel.setOnItemClick((area, index) => {
-        if (area === 'safe') {
-          // 点击安全区物品的处理（暂时保留旧逻辑）
-        } else {
-          // 点击普通区物品的处理（暂时保留旧逻辑）
-        }
-      });
-    }
+    // 初始化 UI
+    this.ui = new UI(canvas);
 
     // 初始化相机
     this.camera = new Camera();
     
-    // 设置相机屏幕中心和尺寸
+    // 设置相机屏幕中心
     const center = this.renderer.getScreenCenter();
-    const size = this.renderer.getScreenSize();
-    this.camera.setScreenCenter(center.x, center.y, size.width, size.height);
-    
-    // 启用 Y 方向跟随（使玩家始终在屏幕中心，除非到达地图边缘）
-    this.camera.setFollowY(true);
+    this.camera.setScreenCenter(center.x, center.y);
 
     // 初始化储物袋
     this.bag = new Bag();
@@ -146,31 +92,19 @@ export class Game {
     // 初始化读条系统
     this.channeling = new Channeling();
 
-    // 初始化传送门读条控制器
-    this.portalChannelController = new PortalChannelController();
-
     // 初始化全局倒计时
     this.sessionTimer = new SessionTimer(12 * 60);
 
     // 初始化玩家（临时位置，后续从地图配置加载）
     this.player = new Player(100, 400, 0);
     
-    // 设置玩家配置（基础值 + 修炼点加成）
-    const baseHp = GameConfig.player.maxHp;
-    const baseAtk = GameConfig.player.attackDamage;
-    this.player.maxHp = baseHp + playerProfile.attrs.hp;
-    this.player.hp = this.player.maxHp;
-    this.player.attackDamage = baseAtk + playerProfile.attrs.atk;
+    // 设置玩家配置
+    this.player.hp = GameConfig.player.hp;
+    this.player.maxHp = GameConfig.player.maxHp;
+    this.player.attackDamage = GameConfig.player.attackDamage;
     this.player.attackRange = GameConfig.player.attackRange;
     this.player.attackYThreshold = GameConfig.player.attackYThreshold;
     this.player.attackCooldown = GameConfig.player.attackCooldown;
-    
-    // 应用移动速度加成（如果有 move 属性影响速度）
-    // 注意：Player 的 speed 是私有属性，可能需要通过其他方式设置
-    // 这里先保留，后续可以根据需要调整
-
-    // 初始化移动端控制（如果支持）
-    this.setupMobileControls(canvas);
 
     // 设置输入处理
     this.setupInput();
@@ -181,10 +115,9 @@ export class Game {
     // 设置窗口大小变化处理
     window.addEventListener('resize', () => {
       this.renderer.handleResize();
-      // 更新相机屏幕中心和尺寸
+      // 更新相机屏幕中心
       const newCenter = this.renderer.getScreenCenter();
-      const newSize = this.renderer.getScreenSize();
-      this.camera.setScreenCenter(newCenter.x, newCenter.y, newSize.width, newSize.height);
+      this.camera.setScreenCenter(newCenter.x, newCenter.y);
     });
 
     // 设置鼠标点击处理（用于背包对话框）
@@ -194,47 +127,10 @@ export class Game {
   }
 
   /**
-   * 进入秘境
-   * @param dungeonId 秘境ID
-   * @param seed 随机种子（可选）
-   */
-  async enterDungeon(dungeonId: string, seed?: number): Promise<void> {
-    try {
-      // 重新加载 profile（确保最新）
-      this.playerProfile = ProfileStore.loadProfile();
-      
-      // 注入出战安全区物品到 Bag
-      for (const item of this.playerProfile.loadoutSafeItems) {
-        this.bag.addSafe(item);
-      }
-      
-      // 加载传送门模板（如果尚未加载）
-      if (!PortalTemplateLoader.isLoaded()) {
-        await PortalTemplateLoader.loadPortalTemplates();
-      }
-
-      // 加载秘境配置
-      const dungeonConfig = await DungeonLoader.loadDungeonConfig(dungeonId);
-      
-      // 创建秘境运行状态
-      this.dungeonRunState = new DungeonRunState(dungeonId, dungeonConfig, seed);
-      
-      // 初始化入口地图
-      await this.initFromMap(dungeonConfig.entryMapId, true);
-      
-      console.log(`[Game] 进入秘境: ${dungeonId}`);
-    } catch (error) {
-      console.error('[Game] 进入秘境失败:', error);
-      throw error;
-    }
-  }
-
-  /**
    * 从地图配置初始化世界
    * @param mapId 地图ID（例如 "map_001"）
-   * @param isDungeonMode 是否为秘境模式（影响传送门生成）
    */
-  async initFromMap(mapId: string, isDungeonMode: boolean = false): Promise<void> {
+  async initFromMap(mapId: string): Promise<void> {
     try {
       // 加载地图配置
       const mapConfig = await MapLoader.loadMap(mapId);
@@ -265,55 +161,16 @@ export class Game {
       // 设置玩家可走区域和位置
       const walkArea = world.walkArea;
       this.player.setWalkArea(walkArea);
-      
-      // 计算地图边界并设置相机边界限制
-      let mapBounds: { minX: number; maxX: number; minY: number; maxY: number };
+      // 玩家初始位置放在地图左侧中间
       if (walkArea.type === 'rect') {
-        const rect = walkArea.rect;
-        mapBounds = {
-          minX: rect.x,
-          maxX: rect.x + rect.width,
-          minY: rect.y,
-          maxY: rect.y + rect.height
-        };
+        this.player.x = walkArea.rect.x + 100;
+        this.player.y = walkArea.rect.y + walkArea.rect.height / 2;
       } else {
-        // 多边形：计算边界框
+        // 多边形：使用边界框的中心左侧
         const bounds = Collision.getPolygonBounds(walkArea.points);
-        mapBounds = {
-          minX: bounds.x,
-          maxX: bounds.x + bounds.width,
-          minY: bounds.y,
-          maxY: bounds.y + bounds.height
-        };
+        this.player.x = bounds.x + 100;
+        this.player.y = bounds.y + bounds.height / 2;
       }
-      
-      // 获取屏幕尺寸并设置相机边界
-      const screenSize = this.renderer.getScreenSize();
-      const screenCenter = this.renderer.getScreenCenter();
-      this.camera.setScreenCenter(
-        screenCenter.x,
-        screenCenter.y,
-        screenSize.width,
-        screenSize.height
-      );
-      this.camera.setMapBounds(mapBounds.minX, mapBounds.maxX, mapBounds.minY, mapBounds.maxY);
-      
-      // 如果是在秘境模式下，生成传送门
-      if (isDungeonMode && this.dungeonRunState) {
-        this.portalInstances = PortalSpawner.spawnPortalsForMap(
-          mapId,
-          this.dungeonRunState.dungeonConfig,
-          mapConfig
-        );
-        this.dungeonRunState.portalInstances = this.portalInstances;
-      } else {
-        this.portalInstances = [];
-      }
-      
-      // 设置玩家位置（使用地图配置的 spawnPoints 或默认位置）
-      const spawnPoint = MapSwitcher.getSpawnPoint(mapConfig);
-      this.player.x = spawnPoint.x;
-      this.player.y = spawnPoint.y;
       
       // 设置敌人刷新配置
       this.lastEnemySpawnTime = Date.now();
@@ -403,56 +260,6 @@ export class Game {
 
 
   /**
-   * 设置移动端控制
-   */
-  private setupMobileControls(canvas: HTMLCanvasElement): void {
-    this.mobileControls = new MobileControls(canvas, {
-      onInteract: () => {
-        // 交互按钮（E 键功能）
-        if (this.uiState.uiMode === 'GAME' && !this.uiState.showChoiceDialog && !this.uiState.showBagDialog) {
-          // 优先处理传送门交互
-          if (this.nearestPortal && !this.portalChannelController.isChannelingNow() && !this.channeling.isChanneling()) {
-            this.handlePortalInteraction();
-            return;
-          }
-          // 其次处理灵气点采集
-          if (this.nearestAuraNode && !this.channeling.isChanneling()) {
-            this.handleCollectAura();
-            return;
-          }
-          // 最后处理物品拾取
-          if (this.nearestLoot) {
-            this.handlePickup();
-            return;
-          }
-        }
-      },
-      onAttack: () => {
-        // 攻击按钮
-        if (this.uiState.uiMode === 'GAME' && !this.channeling.isChanneling() && !this.portalChannelController.isChannelingNow()) {
-          this.handlePlayerAttack();
-        }
-      },
-      onBag: () => {
-        // 背包按钮（I/Tab 键功能）
-        this.toggleInventory();
-      },
-      onCancel: () => {
-        // 取消按钮（Esc 键功能）
-        if (this.uiState.uiMode === 'CHANNELING') {
-          this.cancelChanneling();
-        } else if (this.uiState.uiMode === 'INVENTORY') {
-          this.closeInventory();
-        } else if (this.uiState.showBagDialog) {
-          this.uiState.showBagDialog = false;
-          this.uiState.showChoiceDialog = false;
-          this.uiState.pendingItem = null;
-        }
-      }
-    });
-  }
-
-  /**
    * 设置输入处理
    */
   private setupInput(): void {
@@ -464,20 +271,15 @@ export class Game {
         return;
       }
 
-      // CHANNELING 模式下，只允许取消和移动（如果是撤离读条或传送门读条）
+      // CHANNELING 模式下，只允许取消和移动（如果是撤离读条）
       if (this.uiState.uiMode === 'CHANNELING') {
         if (e.key === 'Escape') {
           this.cancelChanneling();
           return;
         }
-        // 撤离读条期间允许移动（WASD）
+        // 撤离读条期间允许移动（WASD），其他读条不允许
         if (this.extractState === 'EXTRACTING') {
           // 允许 WASD 移动
-          this.player.handleKeyDown(e.key);
-          return;
-        }
-        // 传送门读条期间允许移动（WASD）
-        if (this.portalChannelController.isChannelingNow()) {
           this.player.handleKeyDown(e.key);
           return;
         }
@@ -536,19 +338,14 @@ export class Game {
         }
       }
 
-      // GAME 模式下的 E 键交互（优先级：Portal > AuraNode > GroundLoot）
+      // GAME 模式下的 E 键交互（优先级：AuraNode > GroundLoot）
       if (e.key.toLowerCase() === 'e' && !this.uiState.showChoiceDialog && !this.uiState.showBagDialog) {
-        // 优先处理传送门交互
-        if (this.nearestPortal && !this.portalChannelController.isChannelingNow() && !this.channeling.isChanneling()) {
-          this.handlePortalInteraction();
-          return;
-        }
-        // 其次处理灵气点采集
+        // 优先处理灵气点采集
         if (this.nearestAuraNode && !this.channeling.isChanneling()) {
           this.handleCollectAura();
           return;
         }
-        // 最后处理物品拾取
+        // 其次处理物品拾取
         if (this.nearestLoot) {
           this.handlePickup();
           return;
@@ -556,13 +353,6 @@ export class Game {
       }
 
       // F 键撤离已移除，改为自动开始
-
-      // 空格键攻击
-      if (e.key === ' ' && this.uiState.uiMode === 'GAME' && !this.channeling.isChanneling() && !this.portalChannelController.isChannelingNow()) {
-        e.preventDefault();
-        this.handlePlayerAttack();
-        return;
-      }
 
       // 玩家移动（GAME 模式下，或撤离读条期间）
       if (this.uiState.uiMode === 'GAME' || 
@@ -762,15 +552,6 @@ export class Game {
    * 核心函数：cancelChannel
    */
   private cancelChanneling(): void {
-    // 如果是传送门读条，取消传送门读条
-    if (this.portalChannelController.isChannelingNow()) {
-      this.portalChannelController.cancel('user_cancel');
-      this.uiState.uiMode = 'GAME';
-      this.uiState.channelType = null;
-      this.uiState.channelProgress = 0;
-      return;
-    }
-
     const channelType = this.channeling.getType();
     this.channeling.cancelChannel();
     
@@ -891,35 +672,19 @@ export class Game {
     this.gamePhase = 'RESULT';
     this.sessionTimer.stop();
     
-    // 停止游戏循环
-    this.stop();
-    
     // 保存结算前的物品状态（在清空之前）
     const safeItems = this.bag.getSafeItems();
     const unsafeItems = this.bag.getUnsafeItems();
     
-    // 结算物品并保存到 profile
+    // 结算物品
     if (reason === 'SUCCESS') {
-      // 成功：保留 safe + unsafe，都加入仓库
-      this.playerProfile.stashItems.push(...safeItems, ...unsafeItems);
+      // 成功：保留 safe + unsafe
+      // 不需要操作，bag 保持原样
     } else {
-      // 失败：只保留 safe，加入仓库
-      this.playerProfile.stashItems.push(...safeItems);
-    }
-    
-    // 保存 profile
-    ProfileStore.saveProfile(this.playerProfile);
-    
-    // 清空 Bag（为下一局做准备）
-    // 注意：这里需要清空 Bag，但我们已经保存了物品
-    // Bag 类没有 clear 方法，我们需要手动清空
-    const allSafeItems = this.bag.getSafeItems();
-    const allUnsafeItems = this.bag.getUnsafeItems();
-    for (let i = allSafeItems.length - 1; i >= 0; i--) {
-      this.bag.dropFromSafe(i);
-    }
-    for (let i = allUnsafeItems.length - 1; i >= 0; i--) {
-      this.bag.dropFromUnsafe(i);
+      // 失败：保留 safe，清空 unsafe
+      for (let i = unsafeItems.length - 1; i >= 0; i--) {
+        this.bag.dropFromUnsafe(i);
+      }
     }
     
     // 更新 UI 状态
@@ -932,12 +697,6 @@ export class Game {
     this.uiState.resultSafeItems = safeItems;
     this.uiState.resultUnsafeItems = reason === 'SUCCESS' ? unsafeItems : [];
     this.uiState.resultLostItems = reason === 'SUCCESS' ? [] : unsafeItems;
-    
-    // 切换到主界面 RESULT 状态
-    this.appState.setScreen('RESULT');
-    this.appState.setMenuPage('RESULT_SUMMARY');
-    
-    console.log('[Game] 进入结算阶段:', reason);
   }
 
   /**
@@ -1060,142 +819,6 @@ export class Game {
   }
 
   /**
-   * 查找最近的传送门
-   */
-  private findNearestPortal(): PortalInstance | null {
-    let nearest: PortalInstance | null = null;
-    let minDistance = Infinity;
-
-    for (const portal of this.portalInstances) {
-      if (portal.isPlayerInRange(this.player.x, this.player.y)) {
-        const dx = portal.position.x - this.player.x;
-        const dy = portal.position.y - this.player.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance < minDistance) {
-          minDistance = distance;
-          nearest = portal;
-        }
-      }
-    }
-
-    return nearest;
-  }
-
-  /**
-   * 更新传送门交互
-   */
-  private updatePortals(deltaTime: number): void {
-    // 查找最近的传送门
-    this.nearestPortal = this.findNearestPortal();
-
-    // 如果正在读条，更新进度
-    if (this.portalChannelController.isChannelingNow()) {
-      const playerPos = { x: this.player.x, y: this.player.y };
-      const targetMapId = this.portalChannelController.update(deltaTime, playerPos);
-
-      if (targetMapId) {
-        // 读条完成，切换地图
-        this.switchMap(targetMapId);
-      } else {
-        // 更新UI进度
-        this.uiState.channelProgress = this.portalChannelController.getProgress();
-      }
-    }
-  }
-
-  /**
-   * 处理传送门交互
-   */
-  private handlePortalInteraction(): void {
-    if (!this.nearestPortal) {
-      return;
-    }
-
-    // 检查灵气是否足够
-    if (this.nearestPortal.costSpirit && 
-        !this.aura.canSpendAura(this.nearestPortal.costSpirit)) {
-      console.log(`传送失败：灵气不足（需要 ${this.nearestPortal.costSpirit}）`);
-      return;
-    }
-
-    // 开始读条
-    this.portalChannelController.beginChannel(this.nearestPortal);
-    this.uiState.uiMode = 'CHANNELING';
-    this.uiState.channelType = 'PORTAL';
-    this.uiState.channelProgress = 0;
-  }
-
-  /**
-   * 切换地图
-   */
-  private async switchMap(toMapId: string): Promise<void> {
-    if (!this.dungeonRunState) {
-      console.error('[Game] 不在秘境模式，无法切换地图');
-      return;
-    }
-
-    try {
-      // 保存玩家状态
-      const playerState = MapSwitcher.preservePlayerState(this.player, this.bag, this.aura);
-
-      // 清理当前地图实体
-      this.enemies = [];
-      this.groundLoots = [];
-      this.auraNodes = [];
-      this.portalInstances = [];
-
-      // 切换地图
-      const result = await MapSwitcher.switchMap(
-        toMapId,
-        undefined,
-        this.dungeonRunState
-      );
-
-      // 设置新地图的世界
-      this.groundBand = result.world.groundBand;
-      this.obstacles = result.world.obstacles;
-      this.player.setObstacles(this.obstacles);
-      this.extractionZone = result.world.extractionZone;
-      this.auraNodes = result.world.auraNodes;
-      this.groundLoots = result.world.lootDrops;
-      this.enemies = result.world.enemies;
-      this.enemyRefreshConfig = result.world.enemyRefreshConfig;
-
-      // 设置玩家位置
-      this.player.setWalkArea(result.world.walkArea);
-      this.player.x = result.spawnPoint.x;
-      this.player.y = result.spawnPoint.y;
-
-      // 恢复玩家状态
-      MapSwitcher.restorePlayerState(this.player, this.bag, this.aura, playerState);
-
-      // 生成新地图的传送门
-      if (this.dungeonRunState) {
-        this.portalInstances = PortalSpawner.spawnPortalsForMap(
-          toMapId,
-          this.dungeonRunState.dungeonConfig,
-          result.mapConfig
-        );
-        this.dungeonRunState.portalInstances = this.portalInstances;
-      }
-
-      // 重置敌人刷新时间
-      this.lastEnemySpawnTime = Date.now();
-
-      // 重置传送门读条状态
-      this.portalChannelController.cancel('map_switch');
-      this.uiState.uiMode = 'GAME';
-      this.uiState.channelType = null;
-      this.uiState.channelProgress = 0;
-
-      console.log(`[Game] 地图切换成功: ${toMapId}`);
-    } catch (error) {
-      console.error('[Game] 地图切换失败:', error);
-    }
-  }
-
-  /**
    * 尝试拾取物品
    * 核心函数：tryPickup
    */
@@ -1231,48 +854,6 @@ export class Game {
   }
 
   /**
-   * 处理玩家攻击
-   * 核心函数：handlePlayerAttack
-   */
-  private handlePlayerAttack(): void {
-    // 检查是否可以攻击
-    if (!this.player.canAttack()) {
-      return;
-    }
-
-    // 执行攻击（更新冷却时间）
-    if (!this.player.attack()) {
-      return;
-    }
-
-    // 检查范围内的敌人并造成伤害
-    let hitAny = false;
-
-    for (const enemy of this.enemies) {
-      if (enemy.isEnemyDead()) {
-        continue;
-      }
-
-      // 使用玩家的命中检测
-      if (this.player.hitTest(enemy.x, enemy.y)) {
-        // 命中敌人，造成伤害
-        enemy.takeDamage(this.player.attackDamage);
-        hitAny = true;
-
-        // 如果敌人死亡，给予灵气奖励
-        if (enemy.isEnemyDead()) {
-          this.aura.addAura(enemy.auraReward);
-          console.log(`击杀敌人，获得 ${enemy.auraReward} 灵气`);
-        }
-      }
-    }
-
-    if (hitAny) {
-      console.log('攻击命中敌人');
-    }
-  }
-
-  /**
    * 处理丢弃新物品（按钮A）
    */
   private handleDiscardNewItem(): void {
@@ -1288,12 +869,6 @@ export class Game {
    * 处理打开背包（按钮B）
    */
   private handleOpenBag(): void {
-    // 如果使用新 UI 系统，打开 InventoryPanel
-    if (this.uiManager && this.inventoryPanel) {
-      this.inventoryPanel.setData(this.bag, this.aura);
-      this.uiManager.open(this.inventoryPanel, { layer: 'modal' });
-    }
-    
     this.uiState.showBagDialog = true;
     this.uiState.showChoiceDialog = false;
   }
@@ -1318,11 +893,6 @@ export class Game {
       this.bag.addUnsafe(this.uiState.pendingItem);
       console.log(`拾取成功：${this.uiState.pendingItem.name}`);
       this.uiState.pendingItem = null;
-      // 如果使用新 UI 系统，关闭 InventoryPanel
-      if (this.uiManager && this.inventoryPanel && this.inventoryPanel.isOpen) {
-        this.uiManager.close(this.inventoryPanel);
-      }
-      
       this.uiState.showBagDialog = false;
       this.uiState.showChoiceDialog = false;
     }
@@ -1394,20 +964,6 @@ export class Game {
 
     // 更新撤离状态（如果正在撤离）
     if (this.extractState === 'EXTRACTING') {
-      // 更新移动端控制状态（撤离期间允许移动）
-      if (this.mobileControls) {
-        this.mobileControls.update();
-        this.mobileControls.setJoystickEnabled(true);
-        const joystickState = this.mobileControls.getJoystickState();
-        // 只有当摇杆激活时才使用移动向量，否则清除让键盘输入工作
-        if (joystickState.active) {
-          const moveVec = this.mobileControls.getMoveVector();
-          this.player.setMoveVector(moveVec.x, moveVec.y);
-        } else {
-          this.player.clearMoveVector();
-        }
-      }
-
       // 更新撤离进度
       this.updateExtraction(deltaTime);
       
@@ -1427,84 +983,11 @@ export class Game {
       return;
     }
 
-    // CHANNELING 模式下更新读条进度
+    // CHANNELING 模式下更新读条进度（其他读条类型：采集灵气、移动物品）
     if (this.uiState.uiMode === 'CHANNELING') {
-      // 更新移动端控制状态
-      if (this.mobileControls) {
-        this.mobileControls.update();
-        
-        // 根据读条类型设置摇杆可用性
-        let joystickEnabled = false;
-        if (this.portalChannelController.isChannelingNow()) {
-          // 传送门读条：允许移动
-          joystickEnabled = true;
-        }
-        this.mobileControls.setJoystickEnabled(joystickEnabled);
-        
-        if (joystickEnabled) {
-          const joystickState = this.mobileControls.getJoystickState();
-          // 只有当摇杆激活时才使用移动向量，否则清除让键盘输入工作
-          if (joystickState.active) {
-            const moveVec = this.mobileControls.getMoveVector();
-            this.player.setMoveVector(moveVec.x, moveVec.y);
-          } else {
-            this.player.clearMoveVector();
-          }
-        } else {
-          this.player.clearMoveVector();
-        }
-      }
-
-      // 如果是传送门读条，使用传送门控制器更新
-      if (this.portalChannelController.isChannelingNow()) {
-        this.updatePortals(deltaTime);
-        // 更新玩家位置（允许移动）
-        this.player.update();
-        // 更新相机跟随
-        this.camera.follow(this.player.x, this.player.y);
-        this.camera.update();
-        return;
-      }
-      // 其他读条类型（采集灵气、移动物品）
       this.channeling.updateChannelProgress(deltaTime);
       this.uiState.channelProgress = this.channeling.getProgress();
       return;
-    }
-
-    // 更新移动端控制状态
-    if (this.mobileControls) {
-      this.mobileControls.update();
-
-      // 根据输入优先级规则设置摇杆可用性
-      let joystickEnabled = true;
-      if (this.uiState.uiMode === 'INVENTORY') {
-        // 背包打开时：摇杆不控制移动
-        joystickEnabled = false;
-      } else if ((this.uiState.uiMode as string) === 'CHANNELING') {
-        // 读条进行时：按现有规则
-        if ((this.extractState as string) === 'EXTRACTING' || this.portalChannelController.isChannelingNow()) {
-          // 撤离/传送门读条：允许移动
-          joystickEnabled = true;
-        } else {
-          // 其他读条（采集/转移）：禁止移动
-          joystickEnabled = false;
-        }
-      }
-      this.mobileControls.setJoystickEnabled(joystickEnabled);
-
-      // 更新玩家移动向量
-      if (joystickEnabled) {
-        const joystickState = this.mobileControls.getJoystickState();
-        // 只有当摇杆激活时才使用移动向量，否则清除让键盘输入工作
-        if (joystickState.active) {
-          const moveVec = this.mobileControls.getMoveVector();
-          this.player.setMoveVector(moveVec.x, moveVec.y);
-        } else {
-          this.player.clearMoveVector();
-        }
-      } else {
-        this.player.clearMoveVector();
-      }
     }
 
     // INVENTORY 模式下不更新玩家和拾取提示
@@ -1522,12 +1005,7 @@ export class Game {
       return;
     }
 
-    // 查找最近的传送门（优先级最高）
-    if (this.dungeonRunState) {
-      this.nearestPortal = this.findNearestPortal();
-    }
-
-    // 查找最近的灵气点
+    // 查找最近的灵气点（优先级最高）
     this.nearestAuraNode = this.findNearestAuraNode();
 
     // 查找最近的掉落物
@@ -1566,22 +1044,16 @@ export class Game {
     }
     
     // 更新 UI 状态（显示交互提示）- 仅在未设置撤离提示时检查
-    if (!shouldShowPrompt && this.uiState.uiMode === 'GAME' && !this.channeling.isChanneling() && !this.portalChannelController.isChannelingNow()) {
+    if (!shouldShowPrompt && this.uiState.uiMode === 'GAME' && !this.channeling.isChanneling()) {
       const isNotExtracting = (this.extractState as 'IDLE' | 'EXTRACTING' | 'SUCCESS') !== 'EXTRACTING';
       if (isNotExtracting) {
-        // 优先显示传送门提示
-        if (this.nearestPortal) {
-          shouldShowPrompt = true;
-          const costText = this.nearestPortal.costSpirit ? ` (消耗${this.nearestPortal.costSpirit}灵气)` : '';
-          promptName = `按 E 传送${costText}`;
-          promptSize = 0;
-        } else if (this.nearestAuraNode) {
-          // 其次显示灵气点采集提示
+        // 优先显示灵气点采集提示
+        if (this.nearestAuraNode) {
           shouldShowPrompt = true;
           promptName = `采集灵气(+${this.nearestAuraNode.gainAmount})`;
           promptSize = 0;
         } else if (this.nearestLoot && !this.uiState.showChoiceDialog && !this.uiState.showBagDialog) {
-          // 最后显示物品拾取提示
+          // 其次显示物品拾取提示
           shouldShowPrompt = true;
           promptName = this.nearestLoot.item.name;
           promptSize = this.nearestLoot.item.size;
@@ -1618,11 +1090,6 @@ export class Game {
       renderables.push(this.extractionZone);
     }
 
-    // 渲染传送门（如果存在）
-    if (this.portalInstances.length > 0) {
-      renderables.push(...this.portalInstances);
-    }
-
     // 使用渲染器渲染（会自动按 y + sortOffset 排序）
     this.renderer.render(renderables, this.camera, this.debugDraw);
     
@@ -1635,17 +1102,10 @@ export class Game {
     
     // 渲染撤离点高亮（如果玩家在范围内且不在读条）
     if (this.extractionZone && this.extractionZone.isPlayerInRange(this.player.x, this.player.y) 
-        && this.uiState.uiMode === 'GAME' && !this.channeling.isChanneling() && !this.portalChannelController.isChannelingNow()) {
+        && this.uiState.uiMode === 'GAME' && !this.channeling.isChanneling()) {
       const ctx = this.renderer.getContext();
       // 重新渲染撤离点（带高亮），覆盖之前的渲染
       this.extractionZone.render(ctx, this.camera, true);
-    }
-
-    // 渲染传送门高亮（如果玩家在范围内且不在读条）
-    if (this.nearestPortal && this.uiState.uiMode === 'GAME' && !this.channeling.isChanneling() && !this.portalChannelController.isChannelingNow()) {
-      const ctx = this.renderer.getContext();
-      // 重新渲染最近的传送门（带高亮），覆盖之前的渲染
-      this.nearestPortal.render(ctx, this.camera, true);
     }
     
     // 调试绘制：绘制 footprint
@@ -1656,18 +1116,14 @@ export class Game {
     // 渲染 UI
     // INVENTORY 模式下渲染背包面板
     if (this.uiState.uiMode === 'INVENTORY') {
-      // 如果使用新 UI 系统，InventoryPanel 已经通过 UIManager 渲染
-      // 否则使用旧实现
-      if (!this.uiManager || !this.inventoryPanel || !this.inventoryPanel.isOpen) {
-        this.ui.renderInventoryPanel(
-          this.bag,
-          this.aura,
-          (index) => this.handleMoveSafeToUnsafe(index),
-          (index) => this.handleMoveUnsafeToSafe(index),
-          (index) => this.handleDropFromSafe(index),
-          (index) => this.handleDropFromUnsafe(index)
-        );
-      }
+      this.ui.renderInventoryPanel(
+        this.bag,
+        this.aura,
+        (index) => this.handleMoveSafeToUnsafe(index),
+        (index) => this.handleMoveUnsafeToSafe(index),
+        (index) => this.handleDropFromSafe(index),
+        (index) => this.handleDropFromUnsafe(index)
+      );
     } else if (this.gamePhase === 'RESULT') {
       // RESULT 模式下渲染结算界面
       this.ui.renderResultScreen(
@@ -1676,12 +1132,12 @@ export class Game {
       );
     } else {
       // GAME/CHANNELING 模式下渲染 HUD
-      // 如果正在撤离或传送门读条，显示读条进度
-      if (this.extractState === 'EXTRACTING' || this.portalChannelController.isChannelingNow()) {
-        this.ui.renderHUD(this.bag, this.aura, this.sessionTimer, this.player, this.uiState, this.mobileControls);
+      // 如果正在撤离，也显示撤离进度
+      if (this.extractState === 'EXTRACTING') {
+        this.ui.renderHUD(this.bag, this.aura, this.sessionTimer, this.player, this.uiState);
         this.ui.renderChanneling(this.uiState);
       } else {
-        this.ui.renderHUD(this.bag, this.aura, this.sessionTimer, this.player, this.uiState, this.mobileControls);
+        this.ui.renderHUD(this.bag, this.aura, this.sessionTimer, this.player, this.uiState);
       }
       
       // 渲染取舍弹窗
@@ -1704,13 +1160,6 @@ export class Game {
           () => this.handlePickupPendingItem(),
           canPickup
         );
-      }
-
-      // 渲染竖屏提示遮罩（如果是移动端且竖屏且未关闭）
-      if (this.ui.isMobile() && this.ui.isPortrait() && !this.portraitOverlayDismissed) {
-        this.ui.renderPortraitOverlay(() => {
-          this.portraitOverlayDismissed = true;
-        });
       }
     }
   }
@@ -1736,21 +1185,8 @@ export class Game {
    * 启动游戏
    */
   start(): void {
-    this.appState.setScreen('RUN');
-    // 标记游戏正在运行（用于事件处理）
-    const canvas = this.renderer.getCanvas();
-    if (canvas) {
-      canvas.setAttribute('data-game-running', 'true');
-    }
     this.lastTime = performance.now();
     this.animationFrameId = requestAnimationFrame((time) => this.gameLoop(time));
-  }
-
-  /**
-   * 获取 UI 状态（用于主界面渲染结算页面）
-   */
-  getUIState(): UIState {
-    return this.uiState;
   }
 
   /**
@@ -1760,11 +1196,6 @@ export class Game {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = 0;
-    }
-    // 移除游戏运行标记
-    const canvas = this.renderer.getCanvas();
-    if (canvas) {
-      canvas.removeAttribute('data-game-running');
     }
   }
 }

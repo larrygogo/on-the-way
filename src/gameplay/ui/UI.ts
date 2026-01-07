@@ -4,6 +4,8 @@ import { Aura } from '../systems/Aura';
 import { SessionTimer } from '../systems/SessionTimer';
 import { Player } from '../entities/Player';
 import { MobileControls } from './MobileControls';
+import { UIManager } from '../../ui/core/UIManager';
+import { LoadingPanel } from '../../ui/panels/LoadingPanel';
 
 /**
  * UI 模式
@@ -31,18 +33,30 @@ export interface UIState {
 
 /**
  * UI 渲染器
+ * 兼容层：保留旧 API，内部转发到新 UI 系统
  */
 export class UI {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  private uiManager: UIManager | null = null;
+  private loadingPanel: LoadingPanel | null = null;
+  private useNewUI: boolean = false;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, uiManager?: UIManager) {
     this.canvas = canvas;
     const context = canvas.getContext('2d');
     if (!context) {
       throw new Error('无法获取 Canvas 2D 上下文');
     }
     this.ctx = context;
+    
+    // 如果提供了 UIManager，使用新 UI 系统
+    if (uiManager) {
+      this.uiManager = uiManager;
+      this.useNewUI = true;
+      this.loadingPanel = new LoadingPanel();
+      // 注意：InventoryPanel 在 Game.ts 中创建和管理
+    }
   }
 
   /**
@@ -813,6 +827,36 @@ export class UI {
    * 渲染读条 UI
    */
   renderChanneling(uiState: UIState): void {
+    // 如果使用新 UI 系统，转发到 LoadingPanel
+    if (this.useNewUI && this.uiManager && this.loadingPanel) {
+      const progress = uiState.channelProgress;
+      let typeText = '读条中';
+      if (uiState.channelType === 'COLLECT_AURA') {
+        typeText = '采集中';
+      } else if (uiState.channelType === 'MOVE_TO_SAFE') {
+        typeText = '转移中';
+      } else if (uiState.channelType === 'EXTRACT') {
+        typeText = '撤离中';
+      } else if (uiState.channelType === 'PORTAL') {
+        typeText = '传送中';
+      }
+      
+      // 如果进度大于 0，显示读条面板
+      if (progress > 0) {
+        if (!this.loadingPanel.isOpen) {
+          this.uiManager.open(this.loadingPanel, { layer: 'modal' });
+        }
+        this.loadingPanel.setProgress(progress, `${typeText} ${Math.round(progress * 100)}%`);
+      } else {
+        // 进度为 0，关闭面板
+        if (this.loadingPanel.isOpen) {
+          this.uiManager.close(this.loadingPanel);
+        }
+      }
+      return;
+    }
+
+    // 旧实现（兼容）
     const rect = this.canvas.getBoundingClientRect();
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
