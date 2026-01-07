@@ -26,6 +26,9 @@ import { PortalChannelController } from '../gameplay/systems/PortalChannelContro
 import { PortalTemplateLoader } from '../content/loaders/PortalTemplateLoader';
 import { MapSwitcher } from '../content/runtime/MapSwitcher';
 import { MobileControls } from '../gameplay/ui/MobileControls';
+import { AppState } from './state/AppState';
+import { PlayerProfile } from './state/PlayerProfile';
+import { ProfileStore } from './state/ProfileStore';
 
 /**
  * 主游戏循环
@@ -46,6 +49,8 @@ export class Game {
   private sessionTimer: SessionTimer;
   private ui: UI;
   private gamePhase: 'RUNNING' | 'RESULT' = 'RUNNING';
+  private appState: AppState;
+  private playerProfile: PlayerProfile;
   private extractState: 'IDLE' | 'EXTRACTING' | 'SUCCESS' = 'IDLE';
   private extractProgress: number = 0; // 撤离进度（秒）
   private lastEnemySpawnTime: number = 0; // 上次刷新敌人的时间
@@ -87,7 +92,9 @@ export class Game {
   private mobileControls: MobileControls | null = null;
   private portraitOverlayDismissed: boolean = false; // 竖屏提示遮罩是否已关闭
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, appState: AppState, playerProfile: PlayerProfile) {
+    this.appState = appState;
+    this.playerProfile = playerProfile;
     // 初始化渲染器
     this.renderer = new Renderer(canvas);
 
@@ -97,9 +104,13 @@ export class Game {
     // 初始化相机
     this.camera = new Camera();
     
-    // 设置相机屏幕中心
+    // 设置相机屏幕中心和尺寸
     const center = this.renderer.getScreenCenter();
-    this.camera.setScreenCenter(center.x, center.y);
+    const size = this.renderer.getScreenSize();
+    this.camera.setScreenCenter(center.x, center.y, size.width, size.height);
+    
+    // 启用 Y 方向跟随（使玩家始终在屏幕中心，除非到达地图边缘）
+    this.camera.setFollowY(true);
 
     // 初始化储物袋
     this.bag = new Bag();
@@ -119,13 +130,19 @@ export class Game {
     // 初始化玩家（临时位置，后续从地图配置加载）
     this.player = new Player(100, 400, 0);
     
-    // 设置玩家配置
-    this.player.hp = GameConfig.player.hp;
-    this.player.maxHp = GameConfig.player.maxHp;
-    this.player.attackDamage = GameConfig.player.attackDamage;
+    // 设置玩家配置（基础值 + 修炼点加成）
+    const baseHp = GameConfig.player.maxHp;
+    const baseAtk = GameConfig.player.attackDamage;
+    this.player.maxHp = baseHp + playerProfile.attrs.hp;
+    this.player.hp = this.player.maxHp;
+    this.player.attackDamage = baseAtk + playerProfile.attrs.atk;
     this.player.attackRange = GameConfig.player.attackRange;
     this.player.attackYThreshold = GameConfig.player.attackYThreshold;
     this.player.attackCooldown = GameConfig.player.attackCooldown;
+    
+    // 应用移动速度加成（如果有 move 属性影响速度）
+    // 注意：Player 的 speed 是私有属性，可能需要通过其他方式设置
+    // 这里先保留，后续可以根据需要调整
 
     // 初始化移动端控制（如果支持）
     this.setupMobileControls(canvas);
@@ -139,9 +156,10 @@ export class Game {
     // 设置窗口大小变化处理
     window.addEventListener('resize', () => {
       this.renderer.handleResize();
-      // 更新相机屏幕中心
+      // 更新相机屏幕中心和尺寸
       const newCenter = this.renderer.getScreenCenter();
-      this.camera.setScreenCenter(newCenter.x, newCenter.y);
+      const newSize = this.renderer.getScreenSize();
+      this.camera.setScreenCenter(newCenter.x, newCenter.y, newSize.width, newSize.height);
     });
 
     // 设置鼠标点击处理（用于背包对话框）
@@ -157,6 +175,14 @@ export class Game {
    */
   async enterDungeon(dungeonId: string, seed?: number): Promise<void> {
     try {
+      // 重新加载 profile（确保最新）
+      this.playerProfile = ProfileStore.loadProfile();
+      
+      // 注入出战安全区物品到 Bag
+      for (const item of this.playerProfile.loadoutSafeItems) {
+        this.bag.addSafe(item);
+      }
+      
       // 加载传送门模板（如果尚未加载）
       if (!PortalTemplateLoader.isLoaded()) {
         await PortalTemplateLoader.loadPortalTemplates();
@@ -214,6 +240,38 @@ export class Game {
       // 设置玩家可走区域和位置
       const walkArea = world.walkArea;
       this.player.setWalkArea(walkArea);
+      
+      // 计算地图边界并设置相机边界限制
+      let mapBounds: { minX: number; maxX: number; minY: number; maxY: number };
+      if (walkArea.type === 'rect') {
+        const rect = walkArea.rect;
+        mapBounds = {
+          minX: rect.x,
+          maxX: rect.x + rect.width,
+          minY: rect.y,
+          maxY: rect.y + rect.height
+        };
+      } else {
+        // 多边形：计算边界框
+        const bounds = Collision.getPolygonBounds(walkArea.points);
+        mapBounds = {
+          minX: bounds.x,
+          maxX: bounds.x + bounds.width,
+          minY: bounds.y,
+          maxY: bounds.y + bounds.height
+        };
+      }
+      
+      // 获取屏幕尺寸并设置相机边界
+      const screenSize = this.renderer.getScreenSize();
+      const screenCenter = this.renderer.getScreenCenter();
+      this.camera.setScreenCenter(
+        screenCenter.x,
+        screenCenter.y,
+        screenSize.width,
+        screenSize.height
+      );
+      this.camera.setMapBounds(mapBounds.minX, mapBounds.maxX, mapBounds.minY, mapBounds.maxY);
       
       // 如果是在秘境模式下，生成传送门
       if (isDungeonMode && this.dungeonRunState) {
@@ -808,19 +866,35 @@ export class Game {
     this.gamePhase = 'RESULT';
     this.sessionTimer.stop();
     
+    // 停止游戏循环
+    this.stop();
+    
     // 保存结算前的物品状态（在清空之前）
     const safeItems = this.bag.getSafeItems();
     const unsafeItems = this.bag.getUnsafeItems();
     
-    // 结算物品
+    // 结算物品并保存到 profile
     if (reason === 'SUCCESS') {
-      // 成功：保留 safe + unsafe
-      // 不需要操作，bag 保持原样
+      // 成功：保留 safe + unsafe，都加入仓库
+      this.playerProfile.stashItems.push(...safeItems, ...unsafeItems);
     } else {
-      // 失败：保留 safe，清空 unsafe
-      for (let i = unsafeItems.length - 1; i >= 0; i--) {
-        this.bag.dropFromUnsafe(i);
-      }
+      // 失败：只保留 safe，加入仓库
+      this.playerProfile.stashItems.push(...safeItems);
+    }
+    
+    // 保存 profile
+    ProfileStore.saveProfile(this.playerProfile);
+    
+    // 清空 Bag（为下一局做准备）
+    // 注意：这里需要清空 Bag，但我们已经保存了物品
+    // Bag 类没有 clear 方法，我们需要手动清空
+    const allSafeItems = this.bag.getSafeItems();
+    const allUnsafeItems = this.bag.getUnsafeItems();
+    for (let i = allSafeItems.length - 1; i >= 0; i--) {
+      this.bag.dropFromSafe(i);
+    }
+    for (let i = allUnsafeItems.length - 1; i >= 0; i--) {
+      this.bag.dropFromUnsafe(i);
     }
     
     // 更新 UI 状态
@@ -833,6 +907,12 @@ export class Game {
     this.uiState.resultSafeItems = safeItems;
     this.uiState.resultUnsafeItems = reason === 'SUCCESS' ? unsafeItems : [];
     this.uiState.resultLostItems = reason === 'SUCCESS' ? [] : unsafeItems;
+    
+    // 切换到主界面 RESULT 状态
+    this.appState.setScreen('RESULT');
+    this.appState.setMenuPage('RESULT_SUMMARY');
+    
+    console.log('[Game] 进入结算阶段:', reason);
   }
 
   /**
@@ -1141,7 +1221,6 @@ export class Game {
     }
 
     // 检查范围内的敌人并造成伤害
-    const playerPos = this.player.getPosition();
     let hitAny = false;
 
     for (const enemy of this.enemies) {
@@ -1365,9 +1444,9 @@ export class Game {
       if (this.uiState.uiMode === 'INVENTORY') {
         // 背包打开时：摇杆不控制移动
         joystickEnabled = false;
-      } else if (this.uiState.uiMode === 'CHANNELING') {
+      } else if ((this.uiState.uiMode as string) === 'CHANNELING') {
         // 读条进行时：按现有规则
-        if (this.extractState === 'EXTRACTING' || this.portalChannelController.isChannelingNow()) {
+        if ((this.extractState as string) === 'EXTRACTING' || this.portalChannelController.isChannelingNow()) {
           // 撤离/传送门读条：允许移动
           joystickEnabled = true;
         } else {
@@ -1617,8 +1696,16 @@ export class Game {
    * 启动游戏
    */
   start(): void {
+    this.appState.setScreen('RUN');
     this.lastTime = performance.now();
     this.animationFrameId = requestAnimationFrame((time) => this.gameLoop(time));
+  }
+
+  /**
+   * 获取 UI 状态（用于主界面渲染结算页面）
+   */
+  getUIState(): UIState {
+    return this.uiState;
   }
 
   /**

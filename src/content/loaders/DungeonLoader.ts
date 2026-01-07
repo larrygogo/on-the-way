@@ -11,7 +11,7 @@ export class DungeonLoader {
    */
   static async loadDungeonConfig(dungeonId: string): Promise<DungeonConfig> {
     try {
-      const response = await fetch(`./data/dungeons/${dungeonId}.json`);
+      const response = await fetch(`/data/dungeons/${dungeonId}.json`);
       
       if (!response.ok) {
         throw new Error(`无法加载秘境文件: ${dungeonId}.json (HTTP ${response.status})`);

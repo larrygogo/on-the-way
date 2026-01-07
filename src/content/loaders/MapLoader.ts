@@ -12,7 +12,7 @@ export class MapLoader {
    */
   static async loadMap(mapId: string): Promise<MapConfig> {
     try {
-      const response = await fetch(`./data/maps/${mapId}.json`);
+      const response = await fetch(`/data/maps/${mapId}.json`);
       
       if (!response.ok) {
         throw new Error(`无法加载地图文件: ${mapId}.json (HTTP ${response.status})`);

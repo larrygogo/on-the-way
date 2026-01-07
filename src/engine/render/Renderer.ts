@@ -75,6 +75,17 @@ export class Renderer {
   }
 
   /**
+   * 获取屏幕尺寸
+   */
+  getScreenSize(): { width: number; height: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      width: rect.width,
+      height: rect.height
+    };
+  }
+
+  /**
    * 渲染可渲染对象数组（按 y + sortOffset 排序，越靠下越在前）
    * 关键函数：sortRenderItems
    */

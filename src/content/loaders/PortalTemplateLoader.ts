@@ -16,7 +16,7 @@ export class PortalTemplateLoader {
     }
 
     try {
-      const response = await fetch('./data/portal_templates.json');
+      const response = await fetch('/data/portal_templates.json');
       
       if (!response.ok) {
         throw new Error(`无法加载传送门模板文件: portal_templates.json (HTTP ${response.status})`);
